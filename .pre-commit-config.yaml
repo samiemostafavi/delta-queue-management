@@ -1,0 +1,33 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 22.6.0
+    hooks:
+      - id: black
+        # It is recommended to specify the latest version of Python
+        # supported by your project here, or alternatively use
+        # pre-commit's default_language_version, see
+        # https://pre-commit.com/#top_level-default_language_version
+        language_version: python3.9
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.1.0
+    hooks:
+      - id: codespell
+        args:
+          - --ignore-words-list=nd,reacher,thist,ths, ure, referenc, simpy
+  - repo: https://gitlab.com/PyCQA/flake8
+    rev: 4.0.1
+    hooks:
+      - id: flake8
+        args:
+          - '--per-file-ignores=*/__init__.py:F401'
+          - --ignore=E203,W503,E741
+          - --max-complexity=30
+          - --max-line-length=456
+          - --show-source
+          - --statistics
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.10.1
+    hooks:
+      - id: isort
+        args: ["--profile", "black"]
+

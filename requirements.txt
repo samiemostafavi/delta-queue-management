@@ -1,0 +1,13 @@
+git+https://github.com/samiemostafavi/qsimpy.git
+git+https://github.com/samiemostafavi/qsimpy-aqm.git
+git+https://github.com/samiemostafavi/pr3d.git
+numpy
+matplotlib
+loguru
+seaborn
+polars
+pre-commit
+black
+flake8
+isort
+codespell
