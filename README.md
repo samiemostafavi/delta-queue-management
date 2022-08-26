@@ -18,7 +18,7 @@ Install dependencies
 
 Run benchmarks
 
-        $ python -m delay_bound_benchmark --arrival-rate 0.09 -until 1000 -label test -module newdelta --run-noaqm
+        $ python -m delay_bound_benchmark --arrival-rate 0.09 --until 1000 --label test --module newdelta --run-noaqm
 
 # Contributing
 
