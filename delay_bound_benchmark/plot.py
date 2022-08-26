@@ -15,7 +15,7 @@ def plot_main(plot_args):
     project_folder = plot_args["project_folder"]
 
     # read utilization factor
-    with open(project_folder + "/info.json") as info_json_file:
+    with open(project_folder + "info.json") as info_json_file:
         info = json.load(info_json_file)
     utilization = info["utilization"]
 
