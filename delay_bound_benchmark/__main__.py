@@ -100,8 +100,8 @@ def parse_plot_args(argv: list[str]):
     try:
         opts, args = getopt.getopt(
             argv,
-            "hp:m:",
-            ["project=", "models="],
+            "hp:m:t:",
+            ["project=", "models=", "type="],
         )
     except getopt.GetoptError:
         print('Wrong args, type "python -m delay_bound_benchmark -h" for help')
@@ -119,6 +119,8 @@ def parse_plot_args(argv: list[str]):
             args_dict["project_folder"] = str(p) + "/" + arg + "_results/"
         elif opt in ("-m", "--models"):
             args_dict["models"] = [s.strip() for s in arg.split(",")]
+        elif opt in ("-t", "--type"):
+            args_dict["type"] = arg
 
     return args_dict
 
