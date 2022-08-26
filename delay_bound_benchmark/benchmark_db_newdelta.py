@@ -13,12 +13,7 @@ from loguru import logger
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 
-def run_all(
-    params, 
-    return_dict, 
-    main_benchmark: Callable, 
-    main_benchmark_name: str
-):
+def run_all(params, return_dict, main_benchmark: Callable, main_benchmark_name: str):
 
     if params["run_noaqm"]:
         logger.info(f"{params['run_number']}: Running NOAQM")
@@ -363,7 +358,7 @@ def run_newdelta(params, return_dict):
     def report_state(time_step):
         yield model.env.timeout(time_step)
         logger.info(
-            f"{params['run_number']}: Simulation progress " 
+            f"{params['run_number']}: Simulation progress "
             + f"{100.0*float(model.env.now)/float(params['until'])}% done"
         )
 
@@ -416,7 +411,7 @@ def run_newdelta(params, return_dict):
     failed_ratio = (dropped_df.height + delayed_df.height) / df.height
     logger.info(
         f"{params['run_number']}: NEWDELTA: total={df.height}, "
-        + f"passed={passed_df.height}, dropped={dropped_df.height} " 
+        + f"passed={passed_df.height}, dropped={dropped_df.height} "
         + f"delayed={delayed_df.height}, failed ratio={failed_ratio} ",
     )
 
@@ -498,13 +493,13 @@ if __name__ == "__main__":
             }
             return_dict[run_number] = manager.dict()
             p = mp.Process(
-                target=run_all, 
+                target=run_all,
                 args=(
-                    params, 
+                    params,
                     return_dict,
                     run_newdelta,
                     "Newdelta",
-                )
+                ),
             )
             p.start()
             processes.append(p)
