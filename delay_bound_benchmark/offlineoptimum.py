@@ -54,7 +54,7 @@ def run_offlineoptimum(params, return_dict):
         name="queue",
         service_rp=service,
         horizon=Horizon(
-            max_length=15,
+            max_length=10,
             min_length=None,
             arrival_rate=None,
         ),
