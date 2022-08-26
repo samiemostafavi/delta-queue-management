@@ -16,7 +16,7 @@ def run_offlineoptimum(params, return_dict):
     from qsimpy_aqm.oo import OfflineOptimumQueue
     from qsimpy_aqm.random import HeavyTailGamma
 
-    records_path = params["records_path"] + "oo/"
+    records_path = params["records_path"] + "offline-optimum/"
     os.makedirs(records_path, exist_ok=True)
 
     # Create the QSimPy environment

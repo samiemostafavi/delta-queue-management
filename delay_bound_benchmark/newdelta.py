@@ -19,7 +19,7 @@ def run_newdelta(params, return_dict):
     from qsimpy_aqm.newdelta import Horizon, NewDeltaQueue
     from qsimpy_aqm.random import HeavyTailGamma
 
-    records_path = params["records_path"] + "newdelta/"
+    records_path = params["records_path"] + "delta/"
     os.makedirs(records_path, exist_ok=True)
 
     # Create the QSimPy environment

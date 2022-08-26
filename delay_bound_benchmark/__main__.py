@@ -79,12 +79,12 @@ def parse_run_args(argv: list[str]):
         elif opt in ("-l", "--label"):
             args_dict["label"] = arg
         elif opt in ("-m", "--module"):
-            if arg == "newdelta":
+            if arg == "delta":
                 args_dict["module_callable"] = run_newdelta
-                args_dict["module_label"] = "Newdelta"
-            elif arg == "oo":
+                args_dict["module_label"] = "delta"
+            elif arg == "offline-optimum":
                 args_dict["module_callable"] = run_offlineoptimum
-                args_dict["module_label"] = "Offlineoptimum"
+                args_dict["module_label"] = "offline-optimum"
             else:
                 raise Exception("wrong module name")
         elif opt in ("-n", "--run-noaqm"):
