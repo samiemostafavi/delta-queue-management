@@ -3,6 +3,7 @@ import multiprocessing as mp
 import os
 import time
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 import polars as pl
@@ -12,7 +13,12 @@ from loguru import logger
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 
-def run_all(params, return_dict):
+def run_all(
+    params, 
+    return_dict, 
+    main_benchmark: Callable, 
+    main_benchmark_name: str
+):
 
     if params["run_noaqm"]:
         logger.info(f"{params['run_number']}: Running NOAQM")
@@ -43,8 +49,8 @@ def run_all(params, return_dict):
         return_dict[params["run_number"]]["quantile_key"] = noaqm_res["quantile_key"]
         return_dict[params["run_number"]]["until"] = noaqm_res["until"]
 
-    logger.info(f"{params['run_number']}: Running NewDelta")
-    run_newdelta(params, return_dict)
+    logger.info(f"{params['run_number']}: Running {main_benchmark_name}")
+    main_benchmark(params, return_dict)
 
 
 def run_noaqm(params, return_dict):
@@ -277,7 +283,7 @@ def run_newdelta(params, return_dict):
             json_address=params["predictor_addr_json"],
         ),
         horizon=Horizon(
-            max_length=15,
+            max_length=10,
             min_length=None,
             arrival_rate=None,
         ),
@@ -357,7 +363,8 @@ def run_newdelta(params, return_dict):
     def report_state(time_step):
         yield model.env.timeout(time_step)
         logger.info(
-            f"{params['run_number']}: Simulation progress {100.0*float(model.env.now)/float(params['until'])}% done"
+            f"{params['run_number']}: Simulation progress " 
+            + f"{100.0*float(model.env.now)/float(params['until'])}% done"
         )
 
     for step in np.arange(
@@ -408,8 +415,9 @@ def run_newdelta(params, return_dict):
 
     failed_ratio = (dropped_df.height + delayed_df.height) / df.height
     logger.info(
-        f"{params['run_number']}: NEWDELTA: total={df.height}, passed={passed_df.height}, "
-        + f"dropped={dropped_df.height}, delayed={delayed_df.height}, failed ratio={failed_ratio}",
+        f"{params['run_number']}: NEWDELTA: total={df.height}, "
+        + f"passed={passed_df.height}, dropped={dropped_df.height} " 
+        + f"delayed={delayed_df.height}, failed ratio={failed_ratio} ",
     )
 
     return_dict[params["run_number"]]["total"] = df.height
@@ -429,7 +437,8 @@ def run_newdelta(params, return_dict):
 
 if __name__ == "__main__":
 
-    arrival_rate = {"value": 0.09, "name": "lowutil"}
+    # arrival_rate = {"value": 0.09, "name": "lowutil"}
+    arrival_rate = {"value": 0.095, "name": "highutil"}
 
     # arrival_rate = {
     #    'value' : 0.095,
@@ -481,14 +490,22 @@ if __name__ == "__main__":
                 "service_seed": 120034 + i * 200202 + j * 20111,
                 "quantile_key": bench_params[key_this_run],  # quantile key
                 "until": int(
-                    1000  # 00
+                    1000000  # 00
                 ),  # 10M timesteps takes 1000 seconds, generates 900k samples
                 "report_state": 0.05,  # 0.05 # report when 10%, 20%, etc progress reaches
                 "predictor_addr_h5": predictors_path + "gmevm_model.h5",
                 "predictor_addr_json": predictors_path + "gmevm_model.json",
             }
             return_dict[run_number] = manager.dict()
-            p = mp.Process(target=run_all, args=(params, return_dict))
+            p = mp.Process(
+                target=run_all, 
+                args=(
+                    params, 
+                    return_dict,
+                    run_newdelta,
+                    "Newdelta",
+                )
+            )
             p.start()
             processes.append(p)
 
