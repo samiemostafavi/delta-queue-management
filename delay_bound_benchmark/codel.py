@@ -9,14 +9,15 @@ from loguru import logger
 from .core import run_core
 
 
-def add_offlineoptimum_params(params):
-    pass
+def add_codel_params(params):
+    # call by reference
+    params["codel_interval"] = 1
+    params["codel_target"] = 1
 
 
-def run_offlineoptimum(params, return_dict, module_label: str):
+def run_codel(params, return_dict, module_label: str):
 
-    from qsimpy_aqm.newdelta import Horizon
-    from qsimpy_aqm.oo import OfflineOptimumQueue
+    from qsimpy_aqm.codel import CodelQueue
     from qsimpy_aqm.random import HeavyTailGamma
 
     # Queue and Server
@@ -30,16 +31,11 @@ def run_offlineoptimum(params, return_dict, module_label: str):
         dtype="float64",
         batch_size=params["arrivals_number"],
     )
-    queue = OfflineOptimumQueue(
+    queue = CodelQueue(
         name="queue",
         service_rp=service,
-        horizon=Horizon(
-            max_length=10,
-            min_length=None,
-            arrival_rate=None,
-        ),
-        debug_all=False,
-        debug_drops=False,
+        interval=params["codel_interval"],
+        target=params["codel_target"],
     )
 
     run_core(params, return_dict, queue, module_label)

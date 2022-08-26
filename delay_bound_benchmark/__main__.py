@@ -8,21 +8,22 @@ from typing import Callable
 
 from loguru import logger
 
-from .newdelta import run_newdelta
-from .noaqm import run_noaqm
-from .offlineoptimum import run_offlineoptimum
+from .codel import add_codel_params, run_codel
+from .newdelta import add_delta_params, run_newdelta
+from .noaqm import add_noaqm_params, run_noaqm
+from .offlineoptimum import add_offlineoptimum_params, run_offlineoptimum
 from .plot import plot_main
 
 
-def main_process(
-    params, return_dict, main_benchmark: Callable, main_benchmark_name: str
-):
+def process(params, return_dict, main_benchmark: Callable, main_benchmark_name: str):
 
     if params["run_noaqm"]:
-        logger.info(f"{params['run_number']}: Running NOAQM")
-        run_noaqm(params, return_dict)
+        logger.info(f"{params['run_number']}: Running noaqm")
+        run_noaqm(params, return_dict, "noaqm")
+        params["delay_bound"] = return_dict[params["run_number"]]["quantile_value"]
+        logger.info(f"Set delay_bound={params['delay_bound']}")
     else:
-        logger.info(f"{params['run_number']}: Not running NOAQM, reading results")
+        logger.info(f"{params['run_number']}: Not running noaqm, reading results")
         noaqm_res_path = (
             params["records_path"]
             + "noaqm/"
@@ -35,20 +36,15 @@ def main_process(
             noaqm_res = json.load(json_file)
 
         logger.info(
-            f"{params['run_number']}: "
+            f"Loaded noaqm {params['run_number']}: "
             + f"quantile_value={noaqm_res['quantile_value']}, "
-            + f"quantile_key={noaqm_res['quantile_key']}, "
-            + f"until={noaqm_res['until']}"
         )
 
-        return_dict[params["run_number"]]["quantile_value"] = noaqm_res[
-            "quantile_value"
-        ]
-        return_dict[params["run_number"]]["quantile_key"] = noaqm_res["quantile_key"]
-        return_dict[params["run_number"]]["until"] = noaqm_res["until"]
+        params["delay_bound"] = noaqm_res["quantile_value"]
+        logger.info(f"Set delay_bound={params['delay_bound']}")
 
     logger.info(f"{params['run_number']}: Running {main_benchmark_name}")
-    main_benchmark(params, return_dict)
+    main_benchmark(params, return_dict, main_benchmark_name)
 
 
 def parse_run_args(argv: list[str]):
@@ -80,11 +76,17 @@ def parse_run_args(argv: list[str]):
             args_dict["label"] = arg
         elif opt in ("-m", "--module"):
             if arg == "delta":
-                args_dict["module_callable"] = run_newdelta
+                args_dict["module_set_param"] = add_delta_params
+                args_dict["module_run"] = run_newdelta
                 args_dict["module_label"] = "delta"
             elif arg == "offline-optimum":
-                args_dict["module_callable"] = run_offlineoptimum
+                args_dict["module_set_param"] = add_offlineoptimum_params
+                args_dict["module_run"] = run_offlineoptimum
                 args_dict["module_label"] = "offline-optimum"
+            elif arg == "codel":
+                args_dict["module_set_param"] = add_codel_params
+                args_dict["module_run"] = run_codel
+                args_dict["module_label"] = "codel"
             else:
                 raise Exception("wrong module name")
         elif opt in ("-n", "--run-noaqm"):
@@ -125,17 +127,21 @@ def parse_plot_args(argv: list[str]):
     return args_dict
 
 
-def run_main(exp_args: dict):
+def run_processes(exp_args: dict):
+    # this function creates the param dict for the run
 
-    logger.info(f"Running delay-bound benchmark experiment with args: {exp_args}")
+    logger.info(
+        "Prepare delay-bound benchmark experiment args "
+        + f"with command line args: {exp_args}"
+    )
 
     # project folder setting
     p = Path(__file__).parents[0]
+    main_path = str(p) + "/"
     project_path = str(p) + "/" + exp_args["label"] + "_results/"
-    predictors_path = str(p) + "/predictors/"
     os.makedirs(project_path, exist_ok=True)
 
-    # simulation parameters
+    # experiment parameters
     # quantile values of no-aqm model with p1 as gpd_concentration
     bench_params = {  # target_delay
         "p999": 0.999,
@@ -165,14 +171,12 @@ def run_main(exp_args: dict):
 
             # save the json info
             jsoninfo = json.dumps({"quantile_key": bench_params[key_this_run]})
-            with open(
-                records_path + "info.json",
-                "w",
-            ) as f:
+            with open(records_path + "info.json", "w") as f:
                 f.write(jsoninfo)
 
             run_number = j * parallel_runs + i
             params = {
+                "main_path": main_path,
                 "run_noaqm": exp_args["run-noaqm"],
                 "records_path": records_path,
                 "arrivals_number": 1000000,  # 5M #1.5M
@@ -185,16 +189,21 @@ def run_main(exp_args: dict):
                     exp_args["until"]  # 00
                 ),  # 10M timesteps takes 1000 seconds, generates 900k samples
                 "report_state": 0.05,  # 0.05 # report when 10%, 20%, etc progress reaches
-                "predictor_addr_h5": predictors_path + "gmevm_model.h5",
-                "predictor_addr_json": predictors_path + "gmevm_model.json",
+                "module_label": exp_args["module_label"],
             }
+
+            # complete parameters from the module
+            # call by reference
+            set_param_func = exp_args["module_set_param"]
+            set_param_func(params)
+
             return_dict[run_number] = manager.dict()
             p = mp.Process(
-                target=main_process,
+                target=process,
                 args=(
                     params,
                     return_dict,
-                    exp_args["module_callable"],
+                    exp_args["module_run"],
                     exp_args["module_label"],
                 ),
             )
@@ -220,10 +229,7 @@ def run_main(exp_args: dict):
             "utilization": res_dict["utilization"],
         }
     )
-    with open(
-        project_path + "info.json",
-        "w",
-    ) as f:
+    with open(project_path + "info.json", "w") as f:
         f.write(jsoninfo)
 
     for run_number in return_dict:
@@ -235,7 +241,7 @@ if __name__ == "__main__":
     argv = sys.argv[1:]
     if argv[0] == "run":
         exp_args = parse_run_args(argv[1:])
-        run_main(exp_args)
+        run_processes(exp_args)
     elif argv[0] == "plot":
         plot_args = parse_plot_args(argv[1:])
         plot_main(plot_args)
