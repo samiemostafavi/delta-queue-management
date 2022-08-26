@@ -161,6 +161,14 @@ def run_main(exp_args: dict):
             records_path = project_path + key_this_run + "/"
             os.makedirs(records_path, exist_ok=True)
 
+            # save the json info
+            jsoninfo = json.dumps({"quantile_key": bench_params[key_this_run]})
+            with open(
+                records_path + "info.json",
+                "w",
+            ) as f:
+                f.write(jsoninfo)
+
             run_number = j * parallel_runs + i
             params = {
                 "run_noaqm": exp_args["run-noaqm"],
@@ -199,6 +207,22 @@ def run_main(exp_args: dict):
                 p.terminate()
                 p.join()
                 exit(0)
+
+    # save the json info
+    # {"arrival_rate": 0.095, "arrival_label": "highutil", "utilization":0.9669104987005441}
+    res_dict = return_dict[0].copy()
+    jsoninfo = json.dumps(
+        {
+            "arrival_rate": exp_args["arrival-rate"],
+            "label": exp_args["label"],
+            "utilization": res_dict["utilization"],
+        }
+    )
+    with open(
+        project_path + "info.json",
+        "w",
+    ) as f:
+        f.write(jsoninfo)
 
     for run_number in return_dict:
         print(return_dict[run_number].copy())
