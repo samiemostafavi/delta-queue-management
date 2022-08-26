@@ -6,6 +6,7 @@ matplotlib
 loguru
 seaborn
 polars
+SciencePlots
 pre-commit
 black
 flake8

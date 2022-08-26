@@ -18,7 +18,16 @@ Install dependencies
 
 Run benchmarks
 
-        $ python -m delay_bound_benchmark --arrival-rate 0.09 --until 1000 --label test --module newdelta --run-noaqm
+        $ python -m delay_bound_benchmark run --arrival-rate 0.09 --until 1000000 --label lowutil --module delta --run-noaqm
+        $ python -m delay_bound_benchmark run --arrival-rate 0.09 --until 1000000 --label lowutil --module offline-optimum
+        
+        $ python -m delay_bound_benchmark run --arrival-rate 0.095 --until 1000000 --label highutil --module delta --run-noaqm
+        $ python -m delay_bound_benchmark run --arrival-rate 0.095 --until 1000000 --label highutil --module offline-optimum
+
+Plot the results
+
+        $ python -m delay_bound_benchmark plot --project lowutil --models delta,offline-optimum
+        $ python -m delay_bound_benchmark plot --project highutil --models delta,offline-optimum
 
 # Contributing
 

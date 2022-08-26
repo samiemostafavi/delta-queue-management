@@ -11,9 +11,12 @@ from loguru import logger
 from .newdelta import run_newdelta
 from .noaqm import run_noaqm
 from .offlineoptimum import run_offlineoptimum
+from .plot import plot_main
 
 
-def run_main(params, return_dict, main_benchmark: Callable, main_benchmark_name: str):
+def main_process(
+    params, return_dict, main_benchmark: Callable, main_benchmark_name: str
+):
 
     if params["run_noaqm"]:
         logger.info(f"{params['run_number']}: Running NOAQM")
@@ -48,7 +51,7 @@ def run_main(params, return_dict, main_benchmark: Callable, main_benchmark_name:
     main_benchmark(params, return_dict)
 
 
-def parse_args(argv: list[str]):
+def parse_run_args(argv: list[str]):
 
     # parse arguments to a dict
     args_dict = {}
@@ -65,7 +68,7 @@ def parse_args(argv: list[str]):
     for opt, arg in opts:
         if opt == "-h":
             print(
-                "python -m delay_bound_benchmark "
+                "python -m delay_bound_benchmark run "
                 + "-a <arrival rate> -u <until> -l <label>",
             )
             sys.exit()
@@ -90,9 +93,38 @@ def parse_args(argv: list[str]):
     return args_dict
 
 
-if __name__ == "__main__":
+def parse_plot_args(argv: list[str]):
 
-    exp_args = parse_args(sys.argv[1:])
+    # parse arguments to a dict
+    args_dict = {}
+    try:
+        opts, args = getopt.getopt(
+            argv,
+            "hp:m:",
+            ["project=", "models="],
+        )
+    except getopt.GetoptError:
+        print('Wrong args, type "python -m delay_bound_benchmark -h" for help')
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == "-h":
+            print(
+                "python -m delay_bound_benchmark plot "
+                + "-a <arrival rate> -u <until> -l <label>",
+            )
+            sys.exit()
+        elif opt in ("-p", "--project"):
+            # project folder setting
+            p = Path(__file__).parents[0]
+            args_dict["project_folder"] = str(p) + "/" + arg + "_results/"
+        elif opt in ("-m", "--models"):
+            args_dict["models"] = [s.strip() for s in arg.split(",")]
+
+    return args_dict
+
+
+def run_main(exp_args: dict):
+
     logger.info(f"Running delay-bound benchmark experiment with args: {exp_args}")
 
     # project folder setting
@@ -148,7 +180,7 @@ if __name__ == "__main__":
             }
             return_dict[run_number] = manager.dict()
             p = mp.Process(
-                target=run_main,
+                target=main_process,
                 args=(
                     params,
                     return_dict,
@@ -170,3 +202,16 @@ if __name__ == "__main__":
 
     for run_number in return_dict:
         print(return_dict[run_number].copy())
+
+
+if __name__ == "__main__":
+
+    argv = sys.argv[1:]
+    if argv[0] == "run":
+        exp_args = parse_run_args(argv[1:])
+        run_main(exp_args)
+    elif argv[0] == "plot":
+        plot_args = parse_plot_args(argv[1:])
+        plot_main(plot_args)
+    else:
+        raise Exception("wrong command line option")
