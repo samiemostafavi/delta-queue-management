@@ -83,7 +83,9 @@ def plot_main(plot_args):
     ax.legend()
     ax.grid()
     plt.tight_layout()
-    plt.savefig(project_folder + "result.eps", format=plot_args["type"])
+    plt.savefig(
+        project_folder + "result." + plot_args["type"], format=plot_args["type"]
+    )
 
 
 """
