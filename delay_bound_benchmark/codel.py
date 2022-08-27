@@ -10,9 +10,16 @@ from .core import run_core
 
 
 def add_codel_params(params):
-    # call by reference
-    params["codel_interval"] = 1
-    params["codel_target"] = 1
+
+    # get parameters
+    with open(params["project_path"] + "codel_tune_results.json") as info_json_file:
+        info = json.load(info_json_file)
+
+    for entry in info:
+        if entry["quantile_key"] == params["quantile_key"]:
+            # call by reference
+            params["codel_interval"] = entry["interval"]
+            params["codel_target"] = entry["target"]
 
 
 def run_codel(params, return_dict, module_label: str):

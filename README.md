@@ -20,14 +20,21 @@ Run benchmarks
 
         $ python -m delay_bound_benchmark run --arrival-rate 0.09 --until 1000000 --label lowutil --module delta --run-noaqm
         $ python -m delay_bound_benchmark run --arrival-rate 0.09 --until 1000000 --label lowutil --module offline-optimum
+        $ python -m delay_bound_benchmark run --arrival-rate 0.09 --until 1000000 --label lowutil --module codel
         
         $ python -m delay_bound_benchmark run --arrival-rate 0.095 --until 1000000 --label highutil --module delta --run-noaqm
         $ python -m delay_bound_benchmark run --arrival-rate 0.095 --until 1000000 --label highutil --module offline-optimum
+        $ python -m delay_bound_benchmark run --arrival-rate 0.095 --until 1000000 --label highutil --module codel
 
 Plot the results
 
-        $ python -m delay_bound_benchmark plot --project lowutil --models delta,offline-optimum
-        $ python -m delay_bound_benchmark plot --project highutil --models delta,offline-optimum
+        $ python -m delay_bound_benchmark plot --project lowutil --models codel,delta,offline-optimum --type png
+        $ python -m delay_bound_benchmark plot --project highutil --models codel,delta,offline-optimum --type png
+
+Tune CoDel, note that `until` argument above 100k makes the run much longer
+
+        $ python -m tune_codel -a 0.09 -u 100000 -l tune_lowutil --target-bounds 1,300 --target-initial 20 --interval-bounds 1,300 --interval-initial 10 --run-noaqm
+        $ python -m tune_codel -a 0.095 -u 100000 -l tune_highutil --target-bounds 1,300 --target-initial 20 --interval-bounds 1,300 --interval-initial 10 --run-noaqm
 
 # Contributing
 

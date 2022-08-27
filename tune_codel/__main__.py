@@ -8,11 +8,8 @@ from typing import Callable
 
 from loguru import logger
 
-from .codel import add_codel_params, run_codel
-from .newdelta import add_delta_params, run_newdelta
-from .noaqm import add_noaqm_params, run_noaqm
-from .offlineoptimum import add_offlineoptimum_params, run_offlineoptimum
-from .plot import plot_main
+from .noaqm import run_noaqm
+from .tunecodel import tune_codel
 
 
 def process(params, return_dict, main_benchmark: Callable, main_benchmark_name: str):
@@ -39,7 +36,7 @@ def process(params, return_dict, main_benchmark: Callable, main_benchmark_name: 
             f"Loaded noaqm {params['run_number']}: "
             + f"quantile_value={noaqm_res['quantile_value']}, "
         )
-
+        return_dict[params["run_number"]]["utilization"] = noaqm_res["utilization"]
         params["delay_bound"] = noaqm_res["quantile_value"]
         logger.info(f"Set delay_bound={params['delay_bound']}")
 
@@ -55,17 +52,26 @@ def parse_run_args(argv: list[str]):
     try:
         opts, args = getopt.getopt(
             argv,
-            "ha:u:l:m:n",
-            ["arrival-rate=", "until=", "label=", "module=", "run-noaqm"],
+            "ha:u:l:t:y:i:x:n",
+            [
+                "arrival-rate=",
+                "until=",
+                "label=",
+                "target-bounds=",
+                "target-initial=",
+                "interval-bounds=",
+                "interval-initial=",
+                "run-noaqm",
+            ],
         )
-    except getopt.GetoptError:
-        print('Wrong args, type "python -m delay_bound_benchmark -h" for help')
+    except getopt.GetoptError as e:
+        print(e)
+        print('Wrong args, type "python -m tune_codel -h" for help')
         sys.exit(2)
     for opt, arg in opts:
         if opt == "-h":
             print(
-                "python -m delay_bound_benchmark run "
-                + "-a <arrival rate> -u <until> -l <label>",
+                "python -m tune_codel " + "-a <arrival rate> -u <until> -l <label>",
             )
             sys.exit()
         elif opt in ("-a", "--arrival-rate"):
@@ -74,55 +80,16 @@ def parse_run_args(argv: list[str]):
             args_dict["until"] = int(arg)
         elif opt in ("-l", "--label"):
             args_dict["label"] = arg
-        elif opt in ("-m", "--module"):
-            if arg == "delta":
-                args_dict["module_set_param"] = add_delta_params
-                args_dict["module_run"] = run_newdelta
-                args_dict["module_label"] = "delta"
-            elif arg == "offline-optimum":
-                args_dict["module_set_param"] = add_offlineoptimum_params
-                args_dict["module_run"] = run_offlineoptimum
-                args_dict["module_label"] = "offline-optimum"
-            elif arg == "codel":
-                args_dict["module_set_param"] = add_codel_params
-                args_dict["module_run"] = run_codel
-                args_dict["module_label"] = "codel"
-            else:
-                raise Exception("wrong module name")
+        elif opt in ("-t", "--target-bounds"):
+            args_dict["target-bounds"] = [float(s.strip()) for s in arg.split(",")]
+        elif opt in ("-y", "--target-initial"):
+            args_dict["target-initial"] = float(arg)
+        elif opt in ("-i", "--interval-bounds"):
+            args_dict["interval-bounds"] = [float(s.strip()) for s in arg.split(",")]
+        elif opt in ("-x", "--interval-initial"):
+            args_dict["interval-initial"] = float(arg)
         elif opt in ("-n", "--run-noaqm"):
             args_dict["run-noaqm"] = True
-
-    return args_dict
-
-
-def parse_plot_args(argv: list[str]):
-
-    # parse arguments to a dict
-    args_dict = {}
-    try:
-        opts, args = getopt.getopt(
-            argv,
-            "hp:m:t:",
-            ["project=", "models=", "type="],
-        )
-    except getopt.GetoptError:
-        print('Wrong args, type "python -m delay_bound_benchmark -h" for help')
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt == "-h":
-            print(
-                "python -m delay_bound_benchmark plot "
-                + "-a <arrival rate> -u <until> -l <label>",
-            )
-            sys.exit()
-        elif opt in ("-p", "--project"):
-            # project folder setting
-            p = Path(__file__).parents[0]
-            args_dict["project_folder"] = str(p) + "/" + arg + "_results/"
-        elif opt in ("-m", "--models"):
-            args_dict["models"] = [s.strip() for s in arg.split(",")]
-        elif opt in ("-t", "--type"):
-            args_dict["type"] = arg
 
     return args_dict
 
@@ -155,7 +122,7 @@ def run_processes(exp_args: dict):
 
     # 4 x 4, until 1000000 took 7 hours
     sequential_runs = 1  # 2  # 2  # 4
-    parallel_runs = 16  # 8  # 8  # 18
+    parallel_runs = 4  # 8  # 8  # 18
     for j in range(sequential_runs):
 
         processes = []
@@ -180,7 +147,7 @@ def run_processes(exp_args: dict):
                 "project_path": project_path,
                 "records_path": records_path,
                 "run_noaqm": exp_args["run-noaqm"],
-                "arrivals_number": 1000000,  # 5M #1.5M
+                "arrivals_number": 10000,  # 5M #1.5M
                 "run_number": run_number,
                 "arrival_rate": exp_args["arrival-rate"],
                 "arrival_seed": 100234 + i * 100101 + j * 10223,
@@ -190,13 +157,12 @@ def run_processes(exp_args: dict):
                     exp_args["until"]  # 00
                 ),  # 10M timesteps takes 1000 seconds, generates 900k samples
                 "report_state": 0.05,  # 0.05 # report when 10%, 20%, etc progress reaches
-                "module_label": exp_args["module_label"],
+                "module_label": "codel",
+                "interval_bounds": exp_args["interval-bounds"],
+                "interval_initial": exp_args["interval-initial"],
+                "target_bounds": exp_args["target-bounds"],
+                "target_initial": exp_args["target-initial"],
             }
-
-            # complete parameters from the module
-            # call by reference
-            set_param_func = exp_args["module_set_param"]
-            set_param_func(params)
 
             return_dict[run_number] = manager.dict()
             p = mp.Process(
@@ -204,8 +170,8 @@ def run_processes(exp_args: dict):
                 args=(
                     params,
                     return_dict,
-                    exp_args["module_run"],
-                    exp_args["module_label"],
+                    tune_codel,
+                    "codel",
                 ),
             )
             p.start()
@@ -239,12 +205,6 @@ def run_processes(exp_args: dict):
 
 if __name__ == "__main__":
 
-    argv = sys.argv[1:]
-    if argv[0] == "run":
-        exp_args = parse_run_args(argv[1:])
-        run_processes(exp_args)
-    elif argv[0] == "plot":
-        plot_args = parse_plot_args(argv[1:])
-        plot_main(plot_args)
-    else:
-        raise Exception("wrong command line option")
+    # python -m tune_codel -a 0.09 -u 1000 -l tune_lowutil --target-bounds 0.1,1.0 --target-initial 0.5 --interval-bounds 0.1,2.0 --interval-initial 0.5 --run-noaqm
+    exp_args = parse_run_args(sys.argv[1:])
+    run_processes(exp_args)
