@@ -9,7 +9,11 @@ import numpy as np
 import polars as pl
 from loguru import logger
 
-from .core import run_core
+from .core import run_noaqm_core
+
+
+def add_noaqm_params(params):
+    pass
 
 
 def run_noaqm(params, return_dict, module_label: str):
@@ -34,7 +38,7 @@ def run_noaqm(params, return_dict, module_label: str):
         # queue_limit=10, #None
     )
 
-    df = run_core(params, return_dict, queue, module_label)
+    df = run_noaqm_core(params, return_dict, queue, module_label)
 
     df = df.select([pl.col("end2end_delay")])
     res = df.quantile(

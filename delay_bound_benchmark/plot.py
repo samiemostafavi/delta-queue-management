@@ -72,7 +72,7 @@ def plot_main(plot_args):
         ]
 
     results.sort_values(by=["delay target"], inplace=True)
-    plt.style.use(["science", "ieee"])
+    plt.style.use(["science", "ieee", "bright"])
     ax = results.plot(x="delay target", y=["no-aqm", *plot_args["models"]], kind="bar")
     ax.set_title(f"Utilization factor: {utilization:.3f}")
     ax.set_yscale("log")
@@ -80,7 +80,7 @@ def plot_main(plot_args):
     ax.set_xlabel("Target delay")
     ax.set_ylabel("Failed tasks ratio")
     # draw the legend
-    ax.legend()
+    ax.legend(fontsize=7)
     ax.grid()
     plt.tight_layout()
     plt.savefig(

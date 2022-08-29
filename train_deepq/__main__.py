@@ -8,12 +8,8 @@ from typing import Callable
 
 from loguru import logger
 
-from .codel import add_codel_params, run_codel
-from .deepq import add_deepq_params, run_deepq
-from .newdelta import add_delta_params, run_newdelta
 from .noaqm import run_noaqm
-from .offlineoptimum import add_offlineoptimum_params, run_offlineoptimum
-from .plot import plot_main
+from .traindeepq import add_deepq_params, train_deepq
 
 
 def process(params, return_dict, main_benchmark: Callable, main_benchmark_name: str):
@@ -40,7 +36,7 @@ def process(params, return_dict, main_benchmark: Callable, main_benchmark_name: 
             f"Loaded noaqm {params['run_number']}: "
             + f"quantile_value={noaqm_res['quantile_value']}, "
         )
-
+        return_dict[params["run_number"]]["utilization"] = noaqm_res["utilization"]
         params["delay_bound"] = noaqm_res["quantile_value"]
         logger.info(f"Set delay_bound={params['delay_bound']}")
 
@@ -56,78 +52,42 @@ def parse_run_args(argv: list[str]):
     try:
         opts, args = getopt.getopt(
             argv,
-            "ha:u:l:m:n",
-            ["arrival-rate=", "until=", "label=", "module=", "run-noaqm"],
+            "ha:u:e:l:i:d:n",
+            [
+                "arrival-rate=",
+                "until-train=",
+                "until-eval=" "label=",
+                "interval=",
+                "delta=",
+                "run-noaqm",
+            ],
         )
-    except getopt.GetoptError:
-        print('Wrong args, type "python -m delay_bound_benchmark -h" for help')
+    except getopt.GetoptError as e:
+        print(e)
+        print('Wrong args, type "python -m train_deepq -h" for help')
         sys.exit(2)
     for opt, arg in opts:
         if opt == "-h":
             print(
-                "python -m delay_bound_benchmark run "
-                + "-a <arrival rate> -u <until> -l <label>",
+                "python -m train_dqn "
+                + "-a <arrival rate> -u <until-train> "
+                + "-e <until-eval> -l <label>  -i <interval> -d <delta> -r <delay ref>"
             )
             sys.exit()
         elif opt in ("-a", "--arrival-rate"):
             args_dict["arrival-rate"] = float(arg)
-        elif opt in ("-u", "--until"):
-            args_dict["until"] = int(arg)
+        elif opt in ("-u", "--until-train"):
+            args_dict["until-train"] = int(arg)
+        elif opt in ("-e", "--until-eval"):
+            args_dict["until-eval"] = int(arg)
         elif opt in ("-l", "--label"):
             args_dict["label"] = arg
-        elif opt in ("-m", "--module"):
-            if arg == "delta":
-                args_dict["module_set_param"] = add_delta_params
-                args_dict["module_run"] = run_newdelta
-                args_dict["module_label"] = "delta"
-            elif arg == "offline-optimum":
-                args_dict["module_set_param"] = add_offlineoptimum_params
-                args_dict["module_run"] = run_offlineoptimum
-                args_dict["module_label"] = "offline-optimum"
-            elif arg == "codel":
-                args_dict["module_set_param"] = add_codel_params
-                args_dict["module_run"] = run_codel
-                args_dict["module_label"] = "codel"
-            elif arg == "deepq":
-                args_dict["module_set_param"] = add_deepq_params
-                args_dict["module_run"] = run_deepq
-                args_dict["module_label"] = "deepq"
-            else:
-                raise Exception("wrong module name")
+        elif opt in ("-i", "--interval"):
+            args_dict["interval"] = float(arg)
+        elif opt in ("-d", "--delta"):
+            args_dict["delta"] = float(arg)
         elif opt in ("-n", "--run-noaqm"):
             args_dict["run-noaqm"] = True
-
-    return args_dict
-
-
-def parse_plot_args(argv: list[str]):
-
-    # parse arguments to a dict
-    args_dict = {}
-    try:
-        opts, args = getopt.getopt(
-            argv,
-            "hp:m:t:",
-            ["project=", "models=", "type="],
-        )
-    except getopt.GetoptError:
-        print('Wrong args, type "python -m delay_bound_benchmark -h" for help')
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt == "-h":
-            print(
-                "python -m delay_bound_benchmark plot "
-                + "-a <arrival rate> -u <until> -l <label>",
-            )
-            sys.exit()
-        elif opt in ("-p", "--project"):
-            # project folder setting
-            p = Path(__file__).parents[0]
-            args_dict["project_folder"] = str(p) + "/" + arg + "_results/"
-        elif opt in ("-m", "--models"):
-            args_dict["models"] = [s.strip() for s in arg.split(",")]
-        elif opt in ("-t", "--type"):
-            args_dict["type"] = arg
 
     return args_dict
 
@@ -160,7 +120,7 @@ def run_processes(exp_args: dict):
 
     # 4 x 4, until 1000000 took 7 hours
     sequential_runs = 1  # 2  # 2  # 4
-    parallel_runs = 16  # 8  # 8  # 18
+    parallel_runs = 4  # 8  # 8  # 18
     for j in range(sequential_runs):
 
         processes = []
@@ -185,23 +145,24 @@ def run_processes(exp_args: dict):
                 "project_path": project_path,
                 "records_path": records_path,
                 "run_noaqm": exp_args["run-noaqm"],
-                "arrivals_number": 1000000,  # 5M #1.5M
+                "arrivals_number": 10000,  # 5M #1.5M
                 "run_number": run_number,
                 "arrival_rate": exp_args["arrival-rate"],
                 "arrival_seed": 100234 + i * 100101 + j * 10223,
                 "service_seed": 120034 + i * 200202 + j * 20111,
                 "quantile_key": bench_params[key_this_run],  # quantile key
-                "until": int(
-                    exp_args["until"]  # 00
-                ),  # 10M timesteps takes 1000 seconds, generates 900k samples
+                "until": int(exp_args["until-train"]),
+                "until_train": int(exp_args["until-train"]),  # 00
+                "until_eval": int(exp_args["until-eval"]),  # 00
                 "report_state": 0.05,  # 0.05 # report when 10%, 20%, etc progress reaches
-                "module_label": exp_args["module_label"],
+                "module_label": "deepq",
+                "interval": exp_args["interval"],
+                "delta": exp_args["delta"],
             }
 
             # complete parameters from the module
             # call by reference
-            set_param_func = exp_args["module_set_param"]
-            set_param_func(params)
+            add_deepq_params(params)
 
             return_dict[run_number] = manager.dict()
             p = mp.Process(
@@ -209,8 +170,8 @@ def run_processes(exp_args: dict):
                 args=(
                     params,
                     return_dict,
-                    exp_args["module_run"],
-                    exp_args["module_label"],
+                    train_deepq,
+                    "deepq",
                 ),
             )
             p.start()
@@ -244,12 +205,6 @@ def run_processes(exp_args: dict):
 
 if __name__ == "__main__":
 
-    argv = sys.argv[1:]
-    if argv[0] == "run":
-        exp_args = parse_run_args(argv[1:])
-        run_processes(exp_args)
-    elif argv[0] == "plot":
-        plot_args = parse_plot_args(argv[1:])
-        plot_main(plot_args)
-    else:
-        raise Exception("wrong command line option")
+    # python -m train_deepq -a 0.09 -u 1000 -l train_lowutil --run-noaqm
+    exp_args = parse_run_args(sys.argv[1:])
+    run_processes(exp_args)
