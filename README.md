@@ -45,13 +45,18 @@ Plot the delay bound benchmark results
         $ python -m delay_bound_benchmark plot --project lowutil --models deepq,codel,delta,offline-optimum --type png
         $ python -m delay_bound_benchmark plot --project highutil --models deepq,codel,delta,offline-optimum --type png
 
+Train predictors with different number of samples and models
+
+        $ python -m models_benchmark gym -s 100000 -q 0,3,6,9,12,15,18,21,24 -l qlen -g 0.2
+        $ python -m models_benchmark train -d qlen -l train -c models_benchmark/train_conf.json
+
 Run delta models benchmarks
 
-        $ python -m delta_models_benchmark run -a 0.089 -u 1000000 -l lowutil -m gmevm --run-noaqm
-        $ python -m delta_models_benchmark run -a 0.089 -u 1000000 -l lowutil -m gmm --run-noaqm
+        $ python -m models_benchmark run -a 0.089 -u 1000000 -l lowutil -m gmevm --run-noaqm
+        $ python -m models_benchmark run -a 0.089 -u 1000000 -l lowutil -m gmm --run-noaqm
 
-        $ python -m delta_models_benchmark run -a 0.094 -u 1000000 -l highutil -m gmevm --run-noaqm
-        $ python -m delta_models_benchmark run -a 0.094 -u 1000000 -l highutil -m gmm --run-noaqm
+        $ python -m models_benchmark run -a 0.094 -u 1000000 -l highutil -m gmevm --run-noaqm
+        $ python -m models_benchmark run -a 0.094 -u 1000000 -l highutil -m gmm --run-noaqm
 
 Plot delta models benchmark results
 

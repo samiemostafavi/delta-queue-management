@@ -25,7 +25,7 @@ def run_offlineoptimum(params, return_dict, module_label: str):
         seed=params["service_seed"],
         gamma_concentration=5,
         gamma_rate=0.5,
-        gpd_concentration=0.1,
+        gpd_concentration=0.2,
         threshold_qnt=0.8,
         dtype="float64",
         batch_size=params["arrivals_number"],

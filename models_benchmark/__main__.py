@@ -9,10 +9,12 @@ from typing import Callable
 import numpy as np
 from loguru import logger
 
+from .gym import parse_gym_args, run_gym_processes
 from .newdelta import add_delta_params, run_newdelta
 from .noaqm import run_noaqm
 from .offlineoptimum import add_offlineoptimum_params, run_offlineoptimum
 from .plot import plot_main
+from .train import parse_train_args, run_train_processes
 
 
 def process(params, return_dict, main_benchmark: Callable, main_benchmark_name: str):
@@ -252,6 +254,12 @@ if __name__ == "__main__":
     if argv[0] == "run":
         exp_args = parse_run_args(argv[1:])
         run_processes(exp_args)
+    elif argv[0] == "gym":
+        gym_args = parse_gym_args(argv[1:])
+        run_gym_processes(gym_args)
+    elif argv[0] == "train":
+        train_args = parse_train_args(argv[1:])
+        run_train_processes(train_args)
     elif argv[0] == "plot":
         plot_args = parse_plot_args(argv[1:])
         plot_main(plot_args)
