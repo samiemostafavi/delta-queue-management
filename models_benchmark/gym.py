@@ -1,14 +1,20 @@
 import getopt
 import json
 import multiprocessing as mp
+import multiprocessing.context as ctx
 import os
+import signal
 import sys
 import time
+import traceback
 from pathlib import Path
 
-import numpy as np
-import polars as pl
 from loguru import logger
+
+# very important line to make tensorflow run in sub processes
+ctx._force_start_method("spawn")
+# disable GPU
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 
 def parse_gym_args(argv: list[str]):
@@ -66,94 +72,72 @@ def run_gym_processes(exp_args: dict):
 
     # manager = mp.Manager()
 
-    sequential_runs = 1  # 2  # 2  # 4
-    parallel_runs = 18  # 8  # 8  # 18
-    for j in range(sequential_runs):
+    n_workers = 18
+    logger.info(f"Initializng {n_workers} workers")
+    original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    pool = mp.Pool(n_workers)
+    signal.signal(signal.SIGINT, original_sigint_handler)
 
-        processes = []
-        for i in range(parallel_runs):
+    # create params list for each run
+    n_runs = 18
+    params_list = []
+    for run_number in range(n_runs):
 
-            # parameter figure out
-            keys = list(bench_params.keys())
-            key_this_run = keys[i % len(keys)]
+        # parameter figure out
+        keys = list(bench_params.keys())
+        key_this_run = keys[run_number % len(keys)]
 
-            # create and prepare the results directory
-            records_path = project_path + key_this_run + "/"
-            os.makedirs(records_path, exist_ok=True)
+        # create and prepare the results directory
+        records_path = project_path + key_this_run + "/"
+        os.makedirs(records_path, exist_ok=True)
 
-            # save the json info
-            jsoninfo = json.dumps({"qlen": bench_params[key_this_run]})
-            with open(records_path + "info.json", "w") as f:
-                f.write(jsoninfo)
+        # save the json info
+        jsoninfo = json.dumps({"qlen": bench_params[key_this_run]})
+        with open(records_path + "info.json", "w") as f:
+            f.write(jsoninfo)
 
-            run_number = j * parallel_runs + i
-            params = {
-                "main_path": main_path,
-                "project_path": project_path,
-                "records_path": records_path,
-                "run_number": run_number,
-                "service_seed": 120034 + i * 200202 + j * 20111,
-                "traffic_tasks": bench_params[key_this_run],  # qlen
-                "samples": exp_args["samples"],
-                "report_state_perc": 5,
-                "gpd_concentration": exp_args["gpd_concentration"],
-                "module_label": exp_args["module_label"],
-                "service_batchsize": 100000,
-            }
+        params = {
+            "main_path": main_path,
+            "project_path": project_path,
+            "records_path": records_path,
+            "run_number": run_number,
+            "service_seed": 120034 + run_number * 200202,
+            "traffic_tasks": bench_params[key_this_run],  # qlen
+            "samples": exp_args["samples"],
+            "report_state_perc": 5,
+            "gpd_concentration": exp_args["gpd_concentration"],
+            "module_label": exp_args["module_label"],
+            "service_batchsize": 100000,
+        }
+        params_list.append(params)
 
-            p = mp.Process(
-                target=run_gym_noaqm,
-                args=(
-                    params,
-                    exp_args["module_label"],
-                ),
-            )
-            p.start()
-            processes.append(p)
-
-        try:
-            for p in processes:
-                p.join()
-        except KeyboardInterrupt:
-            for p in processes:
-                p.terminate()
-                p.join()
-                exit(0)
+    try:
+        logger.info(f"Starting {n_runs} jobs")
+        res = pool.map_async(run_gym_noaqm, params_list)
+        logger.info("Waiting for results")
+        res.get(100)  # Without the timeout this blocking call ignores all signals.
+    except KeyboardInterrupt:
+        logger.info("Caught KeyboardInterrupt, terminating workers")
+        pool.terminate()
+    else:
+        logger.info("Normal termination")
+        pool.close()
 
 
-def run_gym_noaqm(params, module_label: str) -> None:
-    from qsimpy.simplequeue import SimpleQueue
-    from qsimpy_aqm.random import HeavyTailGamma
-
-    # Queue and Server
-    # service process a HeavyTailGamma
-    service = HeavyTailGamma(
-        seed=params["service_seed"],
-        gamma_concentration=5,
-        gamma_rate=0.5,
-        gpd_concentration=params["gpd_concentration"],
-        threshold_qnt=0.8,
-        dtype="float64",
-        batch_size=params["service_batchsize"],
-    )
-    queue = SimpleQueue(
-        name="queue",
-        service_rp=service,
-        # queue_limit=10, #None
-    )
-
-    run_gym_core(params, queue, module_label)
-
-
-def run_gym_core(params, queue, module_label: str) -> None:
+def run_gym_noaqm(params) -> None:
 
     # Must move all tf context initializations inside the child process
     from qsimpy.core import Model, Sink
     from qsimpy.gym import GymSink, GymSource
+    from qsimpy.simplequeue import SimpleQueue
+    from qsimpy_aqm.random import HeavyTailGamma
+
+    logger.info(f"{params['run_number']}: running sub-process with params {params}")
 
     # Create the QSimPy environment
     # a class for keeping all of the entities and accessing their attributes
     model = Model(name=f"Gym benchmark #{params['run_number']}")
+    logger.info(f"{params['run_number']}: starting gym benchmark")
 
     # create the gym source
     source = GymSource(
@@ -165,6 +149,22 @@ def run_gym_core(params, queue, module_label: str) -> None:
     model.add_entity(source)
 
     # Queue and Server
+    # service process a HeavyTailGamma
+    service = HeavyTailGamma(
+        seed=params["service_seed"],
+        gamma_concentration=5,
+        gamma_rate=0.5,
+        gpd_concentration=params["gpd_concentration"],
+        threshold_qnt=0.8,
+        dtype="float64",
+        batch_size=params["service_batchsize"],
+        be_quiet=True,
+    )
+    queue = SimpleQueue(
+        name="queue",
+        service_rp=service,
+        # queue_limit=10, #None
+    )
     model.add_entity(queue)
 
     # create the sinks
@@ -231,6 +231,8 @@ def run_gym_core(params, queue, module_label: str) -> None:
     ) as f:
         f.write(modeljson)
 
+    logger.info(f"{params['run_number']}: prepare for run")
+
     # prepare for run
     model.prepare_for_run(debug=False)
 
@@ -257,6 +259,8 @@ def run_gym_core(params, queue, module_label: str) -> None:
         return True
 
     # Run!
+    logger.info(f"{params['run_number']}: start")
+
     start = time.time()
     model.env.run(
         until=model.env.process(

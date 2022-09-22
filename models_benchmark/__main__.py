@@ -13,8 +13,9 @@ from .gym import parse_gym_args, run_gym_processes
 from .newdelta import add_delta_params, run_newdelta
 from .noaqm import run_noaqm
 from .offlineoptimum import add_offlineoptimum_params, run_offlineoptimum
-from .plot import plot_main
+from .plot import parse_plot_args, plot_main
 from .train import parse_train_args, run_train_processes
+from .validate import parse_validate_args, run_validate_processes
 
 
 def process(params, return_dict, main_benchmark: Callable, main_benchmark_name: str):
@@ -101,38 +102,6 @@ def parse_run_args(argv: list[str]):
                 raise Exception("wrong module name")
         elif opt in ("-n", "--run-noaqm"):
             args_dict["run-noaqm"] = True
-
-    return args_dict
-
-
-def parse_plot_args(argv: list[str]):
-
-    # parse arguments to a dict
-    args_dict = {}
-    try:
-        opts, args = getopt.getopt(
-            argv,
-            "hp:m:t:",
-            ["project=", "models=", "type="],
-        )
-    except getopt.GetoptError:
-        print('Wrong args, type "python -m predictors_benchmark -h" for help')
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt == "-h":
-            print(
-                "python -m delay_bound_benchmark plot "
-                + "-a <arrival rate> -u <until> -l <label>",
-            )
-            sys.exit()
-        elif opt in ("-p", "--project"):
-            # project folder setting
-            p = Path(__file__).parents[0]
-            args_dict["project_folder"] = str(p) + "/" + arg + "_results/"
-        elif opt in ("-m", "--models"):
-            args_dict["models"] = [s.strip() for s in arg.split(",")]
-        elif opt in ("-t", "--type"):
-            args_dict["type"] = arg
 
     return args_dict
 
@@ -260,6 +229,9 @@ if __name__ == "__main__":
     elif argv[0] == "train":
         train_args = parse_train_args(argv[1:])
         run_train_processes(train_args)
+    elif argv[0] == "validate":
+        train_args = parse_validate_args(argv[1:])
+        run_validate_processes(train_args)
     elif argv[0] == "plot":
         plot_args = parse_plot_args(argv[1:])
         plot_main(plot_args)

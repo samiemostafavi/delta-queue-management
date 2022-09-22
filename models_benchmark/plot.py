@@ -1,10 +1,44 @@
+import getopt
 import json
 import os
+import sys
+from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 from loguru import logger
+
+
+def parse_plot_args(argv: list[str]):
+
+    # parse arguments to a dict
+    args_dict = {}
+    try:
+        opts, args = getopt.getopt(
+            argv,
+            "hp:m:t:",
+            ["project=", "models=", "type="],
+        )
+    except getopt.GetoptError:
+        print('Wrong args, type "python -m predictors_benchmark -h" for help')
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == "-h":
+            print(
+                "python -m delay_bound_benchmark plot "
+                + "-a <arrival rate> -u <until> -l <label>",
+            )
+            sys.exit()
+        elif opt in ("-p", "--project"):
+            # project folder setting
+            p = Path(__file__).parents[0]
+            args_dict["project_folder"] = str(p) + "/" + arg + "_results/"
+        elif opt in ("-m", "--models"):
+            args_dict["models"] = [s.strip() for s in arg.split(",")]
+        elif opt in ("-t", "--type"):
+            args_dict["type"] = arg
+
+    return args_dict
 
 
 def plot_main(plot_args):

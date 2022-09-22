@@ -1,18 +1,22 @@
 import getopt
 import json
 import multiprocessing as mp
+import multiprocessing.context as ctx
 import os
+import signal
 import sys
-import time
 import warnings
 from os.path import abspath, dirname
 from pathlib import Path
 
 import numpy as np
-import polars as pl
 from loguru import logger
 
 warnings.filterwarnings("ignore")
+# very important line to make tensorflow run in sub processes
+ctx._force_start_method("spawn")
+# disable GPU
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 
 def parse_train_args(argv: list[str]):
@@ -60,9 +64,19 @@ def run_train_processes(exp_args: list):
     os.makedirs(project_path, exist_ok=True)
 
     train_configs = exp_args["train_config"]
+
+    n_workers = 18
+    logger.info(f"Initializng {n_workers} workers")
+    original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    pool = mp.Pool(n_workers)
+    signal.signal(signal.SIGINT, original_sigint_handler)
+
+    # create params list for each run
+    n_runs = len(train_configs.keys())
+    params_list = []
     for model_conf_key in train_configs.keys():
         model_conf = train_configs[model_conf_key]
-        processes = []
+
         # create and prepare the results directory
         records_path = project_path + model_conf_key + "/"
         os.makedirs(records_path, exist_ok=True)
@@ -73,41 +87,41 @@ def run_train_processes(exp_args: list):
             f.write(jsoninfo)
 
         dataset_path = main_path + exp_args["dataset"] + "_results/"
-        p = mp.Process(
-            target=train_model,
-            args=(
-                dataset_path,
-                model_conf,
-                model_conf_key,
-                records_path,
-            ),
-        )
-        p.start()
-        processes.append(p)
+        params = {
+            "dataset_path": dataset_path,
+            "records_path": records_path,
+            "model_conf": model_conf,
+            "model_conf_key": model_conf_key,
+        }
+        params_list.append(params)
 
     try:
-        for p in processes:
-            p.join()
+        logger.info(f"Starting {n_runs} jobs")
+        res = pool.map_async(train_model, params_list)
+        logger.info("Waiting for results")
+        res.get(100)  # Without the timeout this blocking call ignores all signals.
     except KeyboardInterrupt:
-        for p in processes:
-            p.terminate()
-            p.join()
-            exit(0)
+        logger.info("Caught KeyboardInterrupt, terminating workers")
+        pool.terminate()
+    else:
+        logger.info("Normal termination")
+        pool.close()
 
 
-def train_model(
-    records_folder: str, model_conf: dict, module_label: str, predictors_path: str
-):
+def train_model(params):
 
     import tensorflow as tf
-    from tensorflow import keras
-
-    tf.config.set_visible_devices([], "GPU")
     from petastorm import TransformSpec
     from petastorm.spark import SparkDatasetConverter, make_spark_converter
     from pr3d.de import ConditionalGammaMixtureEVM, ConditionalGaussianMM
     from pyspark.sql import SparkSession
     from pyspark.sql.functions import rand
+
+    # set params
+    records_folder = params["dataset_path"]
+    model_conf = params["model_conf"]
+    module_label = params["model_conf_key"]
+    predictors_path = params["records_path"]
 
     # init Spark
     spark = (
@@ -120,7 +134,7 @@ def train_model(
 
     # Set a cache directory on DBFS FUSE for intermediate data.
     file_path = dirname(abspath(__file__))
-    spark_cash_addr = "file://" + file_path + "/sparkcache_" + module_label
+    spark_cash_addr = "file://" + file_path + "/__sparkcache_" + module_label + "__"
     spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, spark_cash_addr)
     logger.info(f"{module_label}: Spark cache folder is set up at: {spark_cash_addr}")
 
@@ -170,7 +184,8 @@ def train_model(
     y_label = model_conf["y_label"]
 
     # dataset partitioning and making the converters
-    # Make sure the number of partitions is at least the number of workers which is required for distributed training.
+    # Make sure the number of partitions is at least the number of workers which is
+    # required for distributed training.
     df_train = df_train.repartition(1)
     converter_train = make_spark_converter(df_train)
     logger.info(f"Dataset loaded, train sampels: {len(converter_train)}")
@@ -249,12 +264,15 @@ def train_model(
         steps_per_epoch = len(converter_train) // batch_size
 
         for idx, params in enumerate(training_rounds):
+
             logger.info(
                 f"Starting training session {idx}/{len(training_rounds)} with {params}"
             )
 
             model._pl_training_model.compile(
-                optimizer=keras.optimizers.Adam(learning_rate=params["learning_rate"]),
+                optimizer=tf.keras.optimizers.Adam(
+                    learning_rate=params["learning_rate"]
+                ),
                 loss=model.loss,
             )
 
@@ -268,8 +286,8 @@ def train_model(
             )
 
     # training done, save the model
-    model.save(predictors_path + module_label + "_model.h5")
-    with open(predictors_path + module_label + "_model.json", "w") as write_file:
+    model.save(predictors_path + "model.h5")
+    with open(predictors_path + "model.json", "w") as write_file:
         json.dump(model_conf, write_file, indent=4)
 
     logger.info(
