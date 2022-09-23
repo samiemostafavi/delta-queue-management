@@ -24,12 +24,13 @@ def parse_gym_args(argv: list[str]):
     try:
         opts, args = getopt.getopt(
             argv,
-            "hs:q:l:g:",
+            "hs:q:l:g:r:",
             [
                 "samples=",
                 "qlens=",
                 "label=",
                 "gpd_concentration=",
+                "runs=",
             ],
         )
     except getopt.GetoptError:
@@ -50,6 +51,8 @@ def parse_gym_args(argv: list[str]):
             args_dict["module_label"] = arg
         elif opt in ("-g", "--gpd-concentration"):
             args_dict["gpd_concentration"] = float(arg)
+        elif opt in ("-r", "--runs"):
+            args_dict["n_runs"] = int(arg)
 
     return args_dict
 
@@ -79,7 +82,7 @@ def run_gym_processes(exp_args: dict):
     signal.signal(signal.SIGINT, original_sigint_handler)
 
     # create params list for each run
-    n_runs = 18
+    n_runs = exp_args["n_runs"]
     params_list = []
     for run_number in range(n_runs):
 
@@ -115,7 +118,7 @@ def run_gym_processes(exp_args: dict):
         logger.info(f"Starting {n_runs} jobs")
         res = pool.map_async(run_gym_noaqm, params_list)
         logger.info("Waiting for results")
-        res.get(100)  # Without the timeout this blocking call ignores all signals.
+        res.get(10000)  # Without the timeout this blocking call ignores all signals.
     except KeyboardInterrupt:
         logger.info("Caught KeyboardInterrupt, terminating workers")
         pool.terminate()

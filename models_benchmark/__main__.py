@@ -1,53 +1,26 @@
 import getopt
 import json
 import multiprocessing as mp
+import multiprocessing.context as ctx
 import os
+import signal
 import sys
 from pathlib import Path
-from typing import Callable
 
 import numpy as np
 from loguru import logger
 
+from .aqm import run_aqm
 from .gym import parse_gym_args, run_gym_processes
-from .newdelta import add_delta_params, run_newdelta
 from .noaqm import run_noaqm
-from .offlineoptimum import add_offlineoptimum_params, run_offlineoptimum
 from .plot import parse_plot_args, plot_main
 from .train import parse_train_args, run_train_processes
 from .validate import parse_validate_args, run_validate_processes
 
-
-def process(params, return_dict, main_benchmark: Callable, main_benchmark_name: str):
-
-    if params["run_noaqm"]:
-        logger.info(f"{params['run_number']}: Running noaqm")
-        run_noaqm(params, return_dict, "noaqm")
-        params["delay_bound"] = return_dict[params["run_number"]]["quantile_value"]
-        logger.info(f"Set delay_bound={params['delay_bound']}")
-    else:
-        logger.info(f"{params['run_number']}: Not running noaqm, reading results")
-        noaqm_res_path = (
-            params["records_path"]
-            + "noaqm/"
-            + str(params["run_number"])
-            + "_noaqm_result.json"
-        )
-
-        # Opening result json file
-        with open(noaqm_res_path) as json_file:
-            noaqm_res = json.load(json_file)
-
-        logger.info(
-            f"Loaded noaqm {params['run_number']}: "
-            + f"quantile_value={noaqm_res['quantile_value']}, "
-        )
-
-        params["delay_bound"] = noaqm_res["quantile_value"]
-        logger.info(f"Set delay_bound={params['delay_bound']}")
-
-    logger.info(f"{params['run_number']}: Running {main_benchmark_name}")
-    main_benchmark(params, return_dict, main_benchmark_name)
+# very important line to make tensorflow run in sub processes
+ctx._force_start_method("spawn")
+# disable GPU
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 
 def parse_run_args(argv: list[str]):
@@ -58,12 +31,14 @@ def parse_run_args(argv: list[str]):
     try:
         opts, args = getopt.getopt(
             argv,
-            "ha:u:l:m:n",
+            "ha:u:l:m:r:g:n",
             [
                 "arrival-rate=",
                 "until=",
                 "label=",
                 "model=",
+                "runs=",
+                "gpd_concentration=",
                 "run-noaqm",
             ],
         )
@@ -74,7 +49,7 @@ def parse_run_args(argv: list[str]):
         if opt == "-h":
             print(
                 "python -m predictors_benchmark run "
-                + "-a <arrival rate> -u <until> -l <label>",
+                + "-a <arrival rate> -u <until> -l <label> -m <model> -r <number of runs> -g <gpd concentration>",
             )
             sys.exit()
         elif opt in ("-a", "--arrival-rate"):
@@ -84,22 +59,14 @@ def parse_run_args(argv: list[str]):
         elif opt in ("-l", "--label"):
             args_dict["label"] = arg
         elif opt in ("-m", "--model"):
-            if arg == "gmm":
-                args_dict["predictor_type"] = "gmm"
-                args_dict["module_set_param"] = add_delta_params
-                args_dict["module_run"] = run_newdelta
-                args_dict["module_label"] = "gmm"
-            elif arg == "gmevm":
-                args_dict["predictor_type"] = "gmevm"
-                args_dict["module_set_param"] = add_delta_params
-                args_dict["module_run"] = run_newdelta
-                args_dict["module_label"] = "gmevm"
-            elif arg == "offline-optimum":
-                args_dict["module_set_param"] = add_offlineoptimum_params
-                args_dict["module_run"] = run_offlineoptimum
-                args_dict["module_label"] = "offline-optimum"
-            else:
-                raise Exception("wrong module name")
+            # <train-label>.<model-type>.<ensemble-num>
+            # e.g. train_p3_128.gmm.0
+            args_dict["model"] = [s.strip() for s in arg.split(".")]
+            args_dict["module_label"] = args_dict["model"][1]
+        elif opt in ("-r", "--runs"):
+            args_dict["n_runs"] = int(arg)
+        elif opt in ("-g", "--gpd-concentration"):
+            args_dict["gpd_concentration"] = float(arg)
         elif opt in ("-n", "--run-noaqm"):
             args_dict["run-noaqm"] = True
 
@@ -110,7 +77,7 @@ def run_processes(exp_args: dict):
     # this function creates the param dict for the run
 
     logger.info(
-        "Prepare delay-bound benchmark experiment args "
+        "Prepare models benchmark experiment args "
         + f"with command line args: {exp_args}"
     )
 
@@ -119,6 +86,32 @@ def run_processes(exp_args: dict):
     main_path = str(p) + "/"
     project_path = str(p) + "/" + exp_args["label"] + "_results/"
     os.makedirs(project_path, exist_ok=True)
+
+    if exp_args["model"][0] != "offline-optimum":
+        # predictor address setting
+        predictor_path_h5 = (
+            str(p)
+            + "/"
+            + exp_args["model"][0]
+            + "_results/"
+            + exp_args["model"][1]
+            + "/model_"
+            + exp_args["model"][2]
+            + ".h5"
+        )
+        predictor_path_json = (
+            str(p)
+            + "/"
+            + exp_args["model"][0]
+            + "_results/"
+            + exp_args["model"][1]
+            + "/model_"
+            + exp_args["model"][2]
+            + ".json"
+        )
+    else:
+        predictor_path_h5 = None
+        predictor_path_json = None
 
     # experiment parameters
     # quantile values of no-aqm model with p1 as gpd_concentration
@@ -129,92 +122,115 @@ def run_processes(exp_args: dict):
         "p8": 0.8,
     }
 
-    manager = mp.Manager()
-    return_dict = manager.dict()
+    n_workers = 18
+    logger.info(f"Initializng {n_workers} workers")
+    original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    pool = mp.Pool(n_workers)
+    signal.signal(signal.SIGINT, original_sigint_handler)
 
-    # 4 x 4, until 1000000 took 7 hours
-    sequential_runs = 1  # 2  # 2  # 4
-    parallel_runs = 16  # 8  # 8  # 18
-    for j in range(sequential_runs):
+    # create params list for each run
+    n_runs = exp_args["n_runs"]
+    params_list = []
+    for run_number in range(n_runs):
 
-        processes = []
-        for i in range(parallel_runs):
+        # parameter figure out
+        keys = list(bench_params.keys())
+        key_this_run = keys[run_number % len(keys)]
 
-            # parameter figure out
-            keys = list(bench_params.keys())
-            key_this_run = keys[i % len(keys)]
+        # create and prepare the results directory
+        records_path = project_path + key_this_run + "/"
+        os.makedirs(records_path, exist_ok=True)
 
-            # create and prepare the results directory
-            records_path = project_path + key_this_run + "/"
-            os.makedirs(records_path, exist_ok=True)
+        # save the json info
+        jsoninfo = json.dumps({"quantile_key": bench_params[key_this_run]})
+        with open(records_path + "info.json", "w") as f:
+            f.write(jsoninfo)
 
-            # save the json info
-            jsoninfo = json.dumps({"quantile_key": bench_params[key_this_run]})
-            with open(records_path + "info.json", "w") as f:
-                f.write(jsoninfo)
+        params = {
+            "run_number": run_number,
+            "module_label": exp_args["module_label"],
+            "module": exp_args["model"],
+            "main_path": main_path,
+            "project_path": project_path,
+            "records_path": records_path,
+            "predictor_path_h5": predictor_path_h5,
+            "predictor_path_json": predictor_path_json,
+            "run_noaqm": exp_args["run-noaqm"],
+            "arrivals_number": 1000000,  # 5M #1.5M
+            "arrival_rate": exp_args["arrival-rate"],
+            "arrival_seed": 100234 + run_number * 100101,
+            "service_seed": 120034 + run_number * 200202,
+            "gpd_concentration": exp_args["gpd_concentration"],
+            "quantile_key": bench_params[key_this_run],  # quantile key
+            "until": int(
+                exp_args["until"]  # 00
+            ),  # 10M timesteps takes 1000 seconds, generates 900k samples
+            "report_state": 0.05,  # 0.05 # report when 10%, 20%, etc progress reaches
+        }
+        params_list.append(params)
 
-            run_number = j * parallel_runs + i
-            params = {
-                "main_path": main_path,
-                "project_path": project_path,
-                "records_path": records_path,
-                "run_noaqm": exp_args["run-noaqm"],
-                "arrivals_number": 1000000,  # 5M #1.5M
-                "run_number": run_number,
-                "arrival_rate": exp_args["arrival-rate"],
-                "arrival_seed": 100234 + i * 100101 + j * 10223,
-                "service_seed": 120034 + i * 200202 + j * 20111,
-                "quantile_key": bench_params[key_this_run],  # quantile key
-                "until": int(
-                    exp_args["until"]  # 00
-                ),  # 10M timesteps takes 1000 seconds, generates 900k samples
-                "report_state": 0.05,  # 0.05 # report when 10%, 20%, etc progress reaches
-                "module_label": exp_args["module_label"],
-                "predictor_type": exp_args["predictor_type"],
-            }
+    # start noaqm runs
+    try:
+        logger.info(f"Starting {n_runs} noaqm jobs")
+        res = pool.map_async(run_noaqm, params_list)
+        logger.info("Waiting for results")
+        noaqm_results = (
+            res.get()
+        )  # Without the timeout this blocking call ignores all signals.
+    except KeyboardInterrupt:
+        logger.info("Caught KeyboardInterrupt, terminating workers")
+        pool.terminate()
+    else:
+        logger.info("Normal noaqm termination")
+        pool.close()
 
-            # complete parameters from the module
-            # call by reference
-            set_param_func = exp_args["module_set_param"]
-            set_param_func(params)
-
-            return_dict[run_number] = manager.dict()
-            p = mp.Process(
-                target=process,
-                args=(
-                    params,
-                    return_dict,
-                    exp_args["module_run"],
-                    exp_args["module_label"],
-                ),
-            )
-            p.start()
-            processes.append(p)
-
-        try:
-            for p in processes:
-                p.join()
-        except KeyboardInterrupt:
-            for p in processes:
-                p.terminate()
-                p.join()
-                exit(0)
+    # process noaqm results
+    for run_number in range(n_runs):
+        params_list[run_number]["delay_bound"] = noaqm_results[run_number][
+            "quantile_value"
+        ]
+        logger.info(
+            f"Run number {run_number}: noaqm results {noaqm_results[run_number]}"
+        )
+        logger.info(
+            f"Run number {run_number}: set delay_bound={params_list[run_number]['delay_bound']}"
+        )
+        measured_utilization = noaqm_results[run_number]["misc"]["utilization"]
 
     # save the json info
     # {"arrival_rate": 0.095, "arrival_label": "highutil", "utilization":0.9669104987005441}
-    res_dict = return_dict[0].copy()
     jsoninfo = json.dumps(
         {
             "arrival_rate": exp_args["arrival-rate"],
             "label": exp_args["label"],
-            "utilization": res_dict["utilization"],
+            "utilization": measured_utilization,
         }
     )
     with open(project_path + "info.json", "w") as f:
         f.write(jsoninfo)
 
-    for run_number in return_dict:
-        print(return_dict[run_number].copy())
+    original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    pool = mp.Pool(n_workers)
+    signal.signal(signal.SIGINT, original_sigint_handler)
+
+    # start aqm runs
+    try:
+        logger.info(f"Starting {n_runs} aqm jobs")
+        res = pool.map_async(run_aqm, params_list)
+        logger.info("Waiting for results")
+        aqm_results = (
+            res.get()
+        )  # Without the timeout this blocking call ignores all signals.
+    except KeyboardInterrupt:
+        logger.info("Caught KeyboardInterrupt, terminating workers")
+        pool.terminate()
+    else:
+        logger.info("Normal noaqm termination")
+        pool.close()
+
+    # process noaqm results
+    for run_number in range(n_runs):
+        logger.info(f"Run number {run_number}: aqm results {aqm_results[run_number]}")
 
 
 if __name__ == "__main__":

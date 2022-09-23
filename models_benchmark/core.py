@@ -1,18 +1,23 @@
 import json
 import os
 import time
+from typing import Tuple
 
 import numpy as np
 import polars as pl
 from loguru import logger
 
 
-def run_core(params, return_dict, queue, module_label: str) -> pl.DataFrame:
+def run_core(params, queue) -> Tuple[pl.DataFrame, dict]:
+
+    results = {}
 
     # Must move all tf context initializations inside the child process
     from qsimpy.core import Model, Source, TimedSource
     from qsimpy.polar import PolarSink
     from qsimpy.random import Deterministic
+
+    module_label = params["module_label"]
 
     records_path = params["records_path"] + module_label + "/"
     os.makedirs(records_path, exist_ok=True)
@@ -109,7 +114,7 @@ def run_core(params, return_dict, queue, module_label: str) -> pl.DataFrame:
         f"Service mean: {service_mean}, "
         + f"arrival mean: {1.00/arrival.rate}, utilization: {service_mean*arrival.rate}"
     )
-    return_dict[params["run_number"]]["utilization"] = service_mean * arrival.rate
+    results["utilization"] = service_mean * arrival.rate
 
     # report timesteps
     def report_state(time_step):
@@ -176,13 +181,13 @@ def run_core(params, return_dict, queue, module_label: str) -> pl.DataFrame:
         + f"delayed={delayed_df.height}, failed ratio={failed_ratio} ",
     )
 
-    return_dict[params["run_number"]]["total"] = df.height
-    return_dict[params["run_number"]]["passed"] = passed_df.height
-    return_dict[params["run_number"]]["dropped"] = dropped_df.height
-    return_dict[params["run_number"]]["delayed"] = delayed_df.height
-    return_dict[params["run_number"]]["failed_ratio"] = failed_ratio
+    results["total"] = df.height
+    results["passed"] = passed_df.height
+    results["dropped"] = dropped_df.height
+    results["delayed"] = delayed_df.height
+    results["failed_ratio"] = failed_ratio
 
-    resultjson = json.dumps(return_dict[params["run_number"]].copy())
+    resultjson = json.dumps(results.copy())
     with open(
         records_path + f"{params['run_number']}_{module_label}_result.json",
         "w",
@@ -190,4 +195,4 @@ def run_core(params, return_dict, queue, module_label: str) -> pl.DataFrame:
     ) as f:
         f.write(resultjson)
 
-    return df
+    return df, results

@@ -25,7 +25,7 @@ def parse_validate_args(argv: list[str]):
     try:
         opts, args = getopt.getopt(
             argv,
-            "hq:d:m:l:r:c:y:",
+            "hq:d:m:l:r:c:y:e:",
             [
                 "qlens=",
                 "dataset=",
@@ -34,6 +34,7 @@ def parse_validate_args(argv: list[str]):
                 "rows=",
                 "columns=",
                 "y-points=",
+                "ensemble=",
             ],
         )
     except getopt.GetoptError:
@@ -45,7 +46,7 @@ def parse_validate_args(argv: list[str]):
         if opt == "-h":
             print(
                 "python -m models_benchmark validate "
-                + "-q <qlens> -d <dataset> -m <trained models> -l <label>",
+                + "-q <qlens> -d <dataset> -m <trained models> -l <label> -e <ensemble num>",
             )
             sys.exit()
         elif opt in ("-q", "--qlens"):
@@ -62,6 +63,8 @@ def parse_validate_args(argv: list[str]):
             args_dict["columns"] = int(arg)
         elif opt in ("-y", "--y-points"):
             args_dict["y_points"] = [int(s.strip()) for s in arg.split(",")]
+        elif opt in ("-e", "--ensemble-num"):
+            args_dict["ensemble_num"] = int(arg)
 
     return args_dict
 
@@ -147,16 +150,18 @@ def run_validate_processes(exp_args: list):
                 main_path + model_project_name + "_results/" + model_conf_key + "/"
             )
 
-            with open(model_path + "model.json") as json_file:
+            with open(
+                model_path + f"model_{exp_args['ensemble_num']}.json"
+            ) as json_file:
                 model_dict = json.load(json_file)
 
             if model_dict["type"] == "gmm":
                 pr_model = ConditionalGaussianMM(
-                    h5_addr=model_path + "model.h5",
+                    h5_addr=model_path + f"model_{exp_args['ensemble_num']}.h5",
                 )
             elif model_dict["type"] == "gmevm":
                 pr_model = ConditionalGammaMixtureEVM(
-                    h5_addr=model_path + "model.h5",
+                    h5_addr=model_path + f"model_{exp_args['ensemble_num']}.h5",
                 )
 
             x = np.ones(len(y_points)) * cond
@@ -173,10 +178,11 @@ def run_validate_processes(exp_args: list):
                 label="prediction " + model_project_name + "." + model_conf_key,
             )
 
+        ax.set_title(f"qlen={cond}")
         ax.set_xlabel("Delay")
         ax.set_ylabel("Success probability")
         ax.grid()
         ax.legend()
     # figure
     fig.tight_layout()
-    fig.savefig(project_path + "qlen_validation_bulk.png")
+    fig.savefig(project_path + f"qlen_validation_bulk_{exp_args['ensemble_num']}.png")

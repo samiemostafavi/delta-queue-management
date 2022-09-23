@@ -47,13 +47,21 @@ Plot the delay bound benchmark results
 
 Train predictors with different number of samples and models, then validate them
 
+        $ python -m models_benchmark gym -s 10000 -q 0,3,6,9,12,15,18,21,24 -l gym_p2short -g 0.2
         $ python -m models_benchmark gym -s 10000 -q 0,10,20,30,40,50 -l gym_p3long -g 0.3
+
         $ python -m models_benchmark train -d gym_p3long -l train_p3long -c models_benchmark/train_conf_lowsample.json
         $ python -m models_benchmark validate -q 0,10,20,30,40,50 -d gym_p3long -m train_p3long.gmm,train_p3long.gmevm -l valide_p3long -r 2 -c 3 -y 0,100,800
 
-        $ python -m models_benchmark gym -s 10000 -q 0,3,6,9,12,15,18,21,24 -l gym_p2short -g 0.2
+        $ python -m models_benchmark train -d gym_p3 -l train_p3_512 -c models_benchmark/train_conf_512.json -e 10
+        $ python -m models_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_512.gmm,train_p3_512.gmevm -l validate_p3_512 -r 3 -c 5 -y 0,100,250 -e 1
+
+        $ python -m models_benchmark train -d gym_p3 -l train_p3_128 -c models_benchmark/train_conf_128.json -e 10
+        $ python -m models_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_128.gmm,train_p3_128.gmevm -l validate_p3_128 -r 3 -c 5 -y 0,100,250 -e 0
 
 Run delta models benchmarks
+        $ python -m models_benchmark run -a 0.089 -u 1000000 -l lowutil_p3 -m train_p3_128.gmevm.0 -r 4 -g 0.3 --run-noaqm
+
 
         $ python -m models_benchmark run -a 0.089 -u 1000000 -l lowutil -m gmevm --run-noaqm
         $ python -m models_benchmark run -a 0.089 -u 1000000 -l lowutil -m gmm --run-noaqm

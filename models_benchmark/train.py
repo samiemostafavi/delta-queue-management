@@ -10,7 +10,11 @@ from os.path import abspath, dirname
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 from loguru import logger
+from petastorm.spark import SparkDatasetConverter
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import rand
 
 warnings.filterwarnings("ignore")
 # very important line to make tensorflow run in sub processes
@@ -26,8 +30,8 @@ def parse_train_args(argv: list[str]):
     try:
         opts, args = getopt.getopt(
             argv,
-            "hd:l:c:",
-            ["dataset=", "label=", "config="],
+            "hd:l:c:e:",
+            ["dataset=", "label=", "config=", "ensembles="],
         )
     except getopt.GetoptError:
         print('Wrong args, type "python -m models_benchmark train -h" for help')
@@ -47,6 +51,8 @@ def parse_train_args(argv: list[str]):
             with open(arg) as json_file:
                 data = json.load(json_file)
             args_dict["train_config"] = data
+        elif opt in ("-e", "--ensembles"):
+            args_dict["ensembles"] = int(arg)
 
     return args_dict
 
@@ -62,6 +68,8 @@ def run_train_processes(exp_args: list):
     main_path = str(p) + "/"
     project_path = str(p) + "/" + exp_args["label"] + "_results/"
     os.makedirs(project_path, exist_ok=True)
+    parquet_folder = main_path + "__trainparquets__"
+    os.makedirs(parquet_folder, exist_ok=True)
 
     train_configs = exp_args["train_config"]
 
@@ -72,28 +80,39 @@ def run_train_processes(exp_args: list):
     signal.signal(signal.SIGINT, original_sigint_handler)
 
     # create params list for each run
-    n_runs = len(train_configs.keys())
+    n_runs = len(train_configs.keys()) * exp_args["ensembles"]
     params_list = []
-    for model_conf_key in train_configs.keys():
-        model_conf = train_configs[model_conf_key]
+    for ensemble_num in range(exp_args["ensembles"]):
+        for model_conf_key in train_configs.keys():
+            model_conf = train_configs[model_conf_key]
 
-        # create and prepare the results directory
-        records_path = project_path + model_conf_key + "/"
-        os.makedirs(records_path, exist_ok=True)
+            # create and prepare the results directory
+            records_path = project_path + model_conf_key + "/"
+            os.makedirs(records_path, exist_ok=True)
 
-        # save the json info
-        jsoninfo = json.dumps(model_conf)
-        with open(records_path + "info.json", "w") as f:
-            f.write(jsoninfo)
+            # save the json info
+            jsoninfo = json.dumps(model_conf)
+            with open(records_path + "info.json", "w") as f:
+                f.write(jsoninfo)
 
-        dataset_path = main_path + exp_args["dataset"] + "_results/"
-        params = {
-            "dataset_path": dataset_path,
-            "records_path": records_path,
-            "model_conf": model_conf,
-            "model_conf_key": model_conf_key,
-        }
-        params_list.append(params)
+            dataset_path = main_path + exp_args["dataset"] + "_results/"
+            params = {
+                "ensembles": exp_args["ensembles"],
+                "order_seed": 9988334,
+                "ensemble_num": ensemble_num,
+                "sample_seed": ensemble_num * 101012,
+                "dataset_path": dataset_path,
+                "records_path": records_path,
+                "model_conf": model_conf,
+                "model_conf_key": model_conf_key,
+                "spark_total_memory": "70g",
+                "spark_subprocess_memory": "3g",
+                "parquet_folder": parquet_folder,
+            }
+            params_list.append(params)
+
+    # load dataset and sample
+    load_dataset_and_sample(params)
 
     try:
         logger.info(f"Starting {n_runs} jobs")
@@ -108,25 +127,17 @@ def run_train_processes(exp_args: list):
         pool.close()
 
 
-def train_model(params):
+def load_dataset_and_sample(params):
+    # load the dataset, take 'dataset' 'ensembles' times
+    # save them in parquet files, send the address to the
+    # sub-process
 
-    import tensorflow as tf
-    from petastorm import TransformSpec
-    from petastorm.spark import SparkDatasetConverter, make_spark_converter
-    from pr3d.de import ConditionalGammaMixtureEVM, ConditionalGaussianMM
-    from pyspark.sql import SparkSession
-    from pyspark.sql.functions import rand
-
-    # set params
-    records_folder = params["dataset_path"]
-    model_conf = params["model_conf"]
-    module_label = params["model_conf_key"]
-    predictors_path = params["records_path"]
+    logger.info("Load dataset and sample")
 
     # init Spark
     spark = (
         SparkSession.builder.appName("Training")
-        .config("spark.driver.memory", "70g")
+        .config("spark.driver.memory", params["spark_total_memory"])
         .config("spark.driver.maxResultSize", 0)
         .getOrCreate()
     )
@@ -134,24 +145,18 @@ def train_model(params):
 
     # Set a cache directory on DBFS FUSE for intermediate data.
     file_path = dirname(abspath(__file__))
-    spark_cash_addr = "file://" + file_path + "/__sparkcache_" + module_label + "__"
+    spark_cash_addr = "file://" + file_path + "/__sparkcache__/__main__"
     spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, spark_cash_addr)
-    logger.info(f"{module_label}: Spark cache folder is set up at: {spark_cash_addr}")
-
-    # set data types
-    npdtype = np.float64
-    # tfdtype = tf.float64
-    strdtype = "float64"
+    logger.info(
+        f"load_dataset_and_sample: Spark cache folder is set up at: {spark_cash_addr}"
+    )
 
     # find records_paths
     records_paths = [
-        records_folder + name
-        for name in os.listdir(records_folder)
-        if os.path.isdir(os.path.join(records_folder, name))
+        params["dataset_path"] + name
+        for name in os.listdir(params["dataset_path"])
+        if os.path.isdir(os.path.join(params["dataset_path"], name))
     ]
-
-    logger.info(f"Opening predictors directory '{predictors_path}'")
-    os.makedirs(predictors_path, exist_ok=True)
 
     # read all the files from the project
     files = []
@@ -167,63 +172,79 @@ def train_model(params):
 
     # Absolutely necessary for randomizing the rows (bug fix)
     # first shuffle, then sample!
-    main_df = main_df.orderBy(rand())
+    main_df = main_df.orderBy(rand(seed=params["order_seed"]))
+    training_params = params["model_conf"]["training_params"]
 
-    training_params = model_conf["training_params"]
-    if training_params["dataset_size"] == "all":
-        df_train = main_df.sample(
-            withReplacement=False,
-            fraction=1.00,
-        )
-    else:
+    for ensemble_num in range(params["ensembles"]):
+
         # take the desired number of records for learning
         df_train = main_df.sample(
             withReplacement=False,
             fraction=training_params["dataset_size"] / main_df.count(),
+            seed=params["sample_seed"],
         )
-    y_label = model_conf["y_label"]
 
-    # dataset partitioning and making the converters
-    # Make sure the number of partitions is at least the number of workers which is
-    # required for distributed training.
-    df_train = df_train.repartition(1)
-    converter_train = make_spark_converter(df_train)
-    logger.info(f"Dataset loaded, train sampels: {len(converter_train)}")
+        logger.info(
+            f"{ensemble_num}: sample {training_params['dataset_size']} rows, result {df_train.count()} samples"
+        )
 
-    condition_labels = model_conf["condition_labels"]
-    y_label = model_conf["y_label"]
+        ensemble_parquet_addr = params["parquet_folder"] + f"/{ensemble_num}.parquet"
+        logger.info(f"{ensemble_num}: writing sub-dataset into {ensemble_parquet_addr}")
+        pandas_df = df_train.toPandas()
+        pandas_df.to_parquet(ensemble_parquet_addr, compression="snappy")
+        del df_train
+        del pandas_df
 
-    def transform_row(pd_batch):
-        """
-        The input and output of this function are pandas dataframes.
-        """
 
-        pd_batch = pd_batch[[y_label, *condition_labels]]
-        pd_batch["y_input"] = pd_batch[y_label]
-        pd_batch = pd_batch.drop(columns=[y_label])
+def train_model(params):
 
-        # if input normalization
-        pd_batch["queue_length"] = pd_batch["queue_length"]
+    import tensorflow as tf
+    from petastorm import TransformSpec
+    from petastorm.spark import SparkDatasetConverter, make_spark_converter
+    from pr3d.de import ConditionalGammaMixtureEVM, ConditionalGaussianMM
+    from pyspark.sql import SparkSession
+    from pyspark.sql.functions import rand
 
-        return pd_batch
-
-    # Note that the output shape of the `TransformSpec` is not automatically known by petastorm,
-    # so we need to specify the shape for new columns in `edit_fields` and specify the order of
-    # the output columns in `selected_fields`.
-    x_fields = [(cond, npdtype, (), False) for cond in condition_labels]
-    transform_spec_fn = TransformSpec(
-        transform_row,
-        edit_fields=[
-            *x_fields,
-            ("y_input", npdtype, (), False),
-        ],
-        selected_fields=[*condition_labels, "y_input"],
+    logger.info(
+        f"{params['model_conf_key']}.{params['ensemble_num']}: starts with params {params}"
     )
 
+    # set params
+    model_conf = params["model_conf"]
+    module_label = params["model_conf_key"]
+    predictors_path = params["records_path"]
+    training_params = model_conf["training_params"]
+
+    # set data types
+    # npdtype = np.float64
+    # tfdtype = tf.float64
+    strdtype = "float64"
+
+    logger.info(f"Opening predictors directory '{predictors_path}'")
+    os.makedirs(predictors_path, exist_ok=True)
+
+    # read sub-dataset into Pandas df
+    ensemble_parquet_addr = (
+        params["parquet_folder"] + f"/{params['ensemble_num']}.parquet"
+    )
+    df_train = pd.read_parquet(ensemble_parquet_addr)
+    logger.info(
+        f"{module_label}.{params['ensemble_num']}: dataset loaded, train sampels: {len(df_train)}"
+    )
+
+    condition_labels = model_conf["condition_labels"]
+
+    # get parameters
+    y_label = model_conf["y_label"]
     model_type = model_conf["type"]
     condition_labels = model_conf["condition_labels"]
     training_rounds = training_params["rounds"]
     batch_size = training_params["batch_size"]
+
+    # dataset pre process
+    df_train = df_train[[y_label, *condition_labels]]
+    df_train["y_input"] = df_train[y_label]
+    df_train = df_train.drop(columns=[y_label])
 
     # initiate the non conditional predictor
     if model_type == "gmm":
@@ -245,52 +266,42 @@ def train_model(params):
             # batch_size = 1024,
         )
 
-    # get into training stack
-    with converter_train.make_tf_dataset(
-        transform_spec=transform_spec_fn,
-        batch_size=batch_size,
-    ) as train_dataset:
+    X = df_train[condition_labels]
+    Y = df_train.y_input
 
-        # tf.keras only accept tuples, not namedtuples
-        # map the dataset to the desired tf.keras input in _pl_training_model
-        def map_fn(x):
-            x_dict = {}
-            for idx, cond in enumerate(condition_labels):
-                x_dict = {**x_dict, cond: x[idx]}
-            return ({**x_dict, "y_input": x.y_input}, x.y_input)
+    steps_per_epoch = len(df_train) // batch_size
 
-        train_dataset = train_dataset.map(map_fn)
+    for idx, round_params in enumerate(training_rounds):
 
-        steps_per_epoch = len(converter_train) // batch_size
+        logger.info(
+            f"{module_label}.{params['ensemble_num']}: training session "
+            + f"{idx+1}/{len(training_rounds)} with {round_params}, "
+            + f"steps_per_epoch: {steps_per_epoch}, batch size: {batch_size}"
+        )
 
-        for idx, params in enumerate(training_rounds):
+        model.training_model.compile(
+            optimizer=tf.keras.optimizers.Adam(
+                learning_rate=round_params["learning_rate"]
+            ),
+            loss=model.loss,
+        )
 
-            logger.info(
-                f"Starting training session {idx}/{len(training_rounds)} with {params}"
-            )
-
-            model._pl_training_model.compile(
-                optimizer=tf.keras.optimizers.Adam(
-                    learning_rate=params["learning_rate"]
-                ),
-                loss=model.loss,
-            )
-
-            logger.info(f"steps_per_epoch: {steps_per_epoch}")
-
-            model._pl_training_model.fit(
-                train_dataset,
-                steps_per_epoch=steps_per_epoch,
-                epochs=params["epochs"],
-                verbose=1,
-            )
+        model.training_model.fit(
+            x=[X, Y],
+            y=Y,
+            steps_per_epoch=steps_per_epoch,
+            epochs=round_params["epochs"],
+            verbose=0,
+        )
 
     # training done, save the model
-    model.save(predictors_path + "model.h5")
-    with open(predictors_path + "model.json", "w") as write_file:
+    model.save(predictors_path + f"model_{params['ensemble_num']}.h5")
+    with open(
+        predictors_path + f"model_{params['ensemble_num']}.json", "w"
+    ) as write_file:
         json.dump(model_conf, write_file, indent=4)
 
     logger.info(
-        f"A {model_type} {'bayesian' if model.bayesian else 'non-bayesian'} "
-        + "model got trained and saved."
+        f"{model_type} {'bayesian' if model.bayesian else 'non-bayesian'} "
+        + f"model {params['ensemble_num']} got trained and saved."
     )
