@@ -1,10 +1,13 @@
 import getopt
 import json
 import os
+
 import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import scienceplots
+
 import pandas as pd
 from loguru import logger
 
