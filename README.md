@@ -47,8 +47,8 @@ Plot the delay bound benchmark results
 
 Train predictors with different number of samples and models, then validate them
 
-        $ python -m models_benchmark gym -s 10000 -q 0,3,6,9,12,15,18,21,24 -l gym_p2short -g 0.2
-        $ python -m models_benchmark gym -s 10000 -q 0,10,20,30,40,50 -l gym_p3long -g 0.3
+        $ python -m models_benchmark gym -s 10000 -q 0,3,6,9,12,15,18,21,24 -l gym_p2short -g 0.2 -r 20
+        $ python -m models_benchmark gym -s 10000 -q 0,10,20,30,40,50 -l gym_p3long -g 0.3 -r 20
 
         $ python -m models_benchmark train -d gym_p3long -l train_p3long -c models_benchmark/train_conf_lowsample.json
         $ python -m models_benchmark validate -q 0,10,20,30,40,50 -d gym_p3long -m train_p3long.gmm,train_p3long.gmevm -l valide_p3long -r 2 -c 3 -y 0,100,800
