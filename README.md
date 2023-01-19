@@ -82,3 +82,11 @@ Use code checkers
         $ pre-commit install
         $ pre-commit run --all-files
 
+
+# Demo commands to run:
+        1. python -m models_benchmark gym -s 10000 -q 0,3,6,9,12,15,18,21,24 -l gym_p2short -g 0.6 -r 20
+        2. python -m models_benchmark train -d gym_p2short -l train_p2short -c models_benchmark/train_conf.json -e 1
+        3. python -m models_benchmark validate -q 0,3,6,9,12,15,18,21,24 -d gym_p2short -m train_p2short.gmm,train_p2short.gmevm -l validate_p2short -r 3 -c 5 -y 0,100,250 -e 0
+        4. python -m models_benchmark run -a 0.089 -u 10000 -l lowutil_p2short -m offline-optimum.oo -r 4 -g 0.6 --run-noaqm
+        5. python -m models_benchmark plot --project lowutil_p2short --models gmm,gmevm,oo --type png
+
