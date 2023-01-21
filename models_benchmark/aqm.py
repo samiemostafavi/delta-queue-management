@@ -48,7 +48,7 @@ def run_aqm(params):
                 json_address=params["predictor_path_json"],
             ),
             horizon=Horizon(
-                max_length=10,
+                max_length=15,
                 min_length=None,
                 arrival_rate=None,
             ),
