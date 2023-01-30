@@ -16,7 +16,7 @@ Install dependencies
 
         $ pip install -Ur requirements.txt
 
-# Usage
+# Usage single-hop
 
 Tune CoDel, note that `until` argument above 100k makes the run much longer
 
@@ -45,10 +45,12 @@ Plot the delay bound benchmark results
         $ python -m delay_bound_benchmark plot --project lowutil --models deepq,codel,delta,offline-optimum --type png
         $ python -m delay_bound_benchmark plot --project highutil --models deepq,codel,delta,offline-optimum --type png
 
-Train predictors with different number of samples and models, then validate them
+Produce data for training delay predictors
 
         $ python -m models_benchmark gym -s 10000 -q 0,3,6,9,12,15,18,21,24 -l gym_p2short -g 0.2
         $ python -m models_benchmark gym -s 10000 -q 0,10,20,30,40,50 -l gym_p3long -g 0.3
+
+Train predictors with different number of samples and models, then validate them
 
         $ python -m models_benchmark train -d gym_p3long -l train_p3long -c models_benchmark/train_conf_lowsample.json
         $ python -m models_benchmark validate -q 0,10,20,30,40,50 -d gym_p3long -m train_p3long.gmm,train_p3long.gmevm -l valide_p3long -r 2 -c 3 -y 0,100,800
@@ -74,6 +76,28 @@ Plot delta models benchmark results
         $ python -m delta_models_benchmark plot --project lowutil --models gmm,gmevm,offline-optimum --type png
         $ python -m delta_models_benchmark plot --project highutil --models gmm,gmevm,offline-optimum --type png
 
+
+# Usage multi-hop
+
+This is an example for a two hop case. 
+
+Produce data for training delay predictors and validate it. We produce samples for 2 hop and 1 hop cases since for a 2 hop network, we need both.
+
+        $ python -m multihop_benchmark gym -s 10000 -q 0,2,4,6,8,10 -d 0.1,0.5,0.9 -p 2 -l gym_2hop_p2 -g 0.2
+        $ python -m multihop_benchmark validate_gym -q [0,2],[4,4],[6,6],[0,10],[8,10] -d gym_2hop_p2 -w [0.1,0.1],[0.1,0.9],[0.9,0.9] -l validate_gym_2hop_p2 -r 3 -c 5 -y 0,100,250
+
+        $ python -m multihop_benchmark gym -s 10000 -q 0,2,4,6,8,10 -d 0.1,0.5,0.9 -p 1 -l gym_1hop_p2 -g 0.2
+        $ python -m multihop_benchmark validate_gym -q [0],[4],[6],[8],[10] -d gym_1hop_p2 -w [0.1],[0.5],[0.9] -l validate_gym_1hop_p2 -r 3 -c 5 -y 0,100,250
+
+Train predictors
+
+        $ python -m multihop_benchmark train -d gym_2hop_p2 -l train_2hop_p2 -c models_benchmark/train_conf_2hop.json -e 10
+        $ python -m multihop_benchmark validate_predictor -q [0,2],[4,4],[6,6],[0,10],[8,10] -d gym_2hop_p2 -w [0.1,0.1],[0.1,0.9],[0.9,0.9] -m train_2hop_p2.gmm,train_2hop_p2.gmevm -l validate_gym_2hop_p2 -r 3 -c 5 -y 0,100,250
+
+        $ python -m multihop_benchmark train -d gym_1hop_p2 -l train_1hop_p2 -c models_benchmark/train_conf_1hop.json -e 10
+        $ python -m multihop_benchmark validate_predictor -q [0,2],[4,4],[6,6],[0,10],[8,10] -d gym_2hop_p2 -w [0.1,0.1],[0.1,0.9],[0.9,0.9] -m train_1hop_p2.gmm,train_1hop_p2.gmevm -l validate_gym_2hop_p2 -r 3 -c 5 -y 0,100,250
+
+        
 # Contributing
 
 Use code checkers

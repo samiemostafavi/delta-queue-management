@@ -16,6 +16,7 @@ from .noaqm import run_noaqm
 from .plot import parse_plot_args, plot_main
 from .train import parse_train_args, run_train_processes
 from .validate import parse_validate_args, run_validate_processes
+from .validate_gym import parse_validate_gym_args, run_validate_gym_processes
 
 # very important line to make tensorflow run in sub processes
 ctx._force_start_method("spawn")
@@ -44,12 +45,12 @@ def parse_run_args(argv: list[str]):
             ],
         )
     except getopt.GetoptError:
-        print('Wrong args, type "python -m predictors_benchmark run -h" for help')
+        print('Wrong args, type "python -m multihop_benchmark run -h" for help')
         sys.exit(2)
     for opt, arg in opts:
         if opt == "-h":
             print(
-                "python -m predictors_benchmark run "
+                "python -m multihop_benchmark run "
                 + "-a <arrival rate> -u <until> -l <label> -m <model> -r <number of runs> -g <gpd concentration>",
             )
             sys.exit()
@@ -80,7 +81,7 @@ def run_processes(exp_args: dict):
     # this function creates the param dict for the run
 
     logger.info(
-        "Prepare models benchmark experiment args "
+        "Prepare multihop_benchmark experiment args "
         + f"with command line args: {exp_args}"
     )
 
@@ -243,18 +244,21 @@ def run_processes(exp_args: dict):
 if __name__ == "__main__":
 
     argv = sys.argv[1:]
-    if argv[0] == "run":
-        exp_args = parse_run_args(argv[1:])
-        run_processes(exp_args)
-    elif argv[0] == "gym":
+    if argv[0] == "gym":
         gym_args = parse_gym_args(argv[1:])
         run_gym_processes(gym_args)
+    elif argv[0] == "validate_gym":
+        validate_gym_args = parse_validate_gym_args(argv[1:])
+        run_validate_gym_processes(validate_gym_args)
     elif argv[0] == "train":
         train_args = parse_train_args(argv[1:])
         run_train_processes(train_args)
     elif argv[0] == "validate":
         train_args = parse_validate_args(argv[1:])
         run_validate_processes(train_args)
+    elif argv[0] == "run":
+        exp_args = parse_run_args(argv[1:])
+        run_processes(exp_args)
     elif argv[0] == "plot":
         plot_args = parse_plot_args(argv[1:])
         plot_main(plot_args)
