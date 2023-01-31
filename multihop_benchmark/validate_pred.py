@@ -1,3 +1,4 @@
+import ast
 import getopt
 import json
 import multiprocessing as mp
@@ -18,16 +19,17 @@ from pyspark.sql import SparkSession
 warnings.filterwarnings("ignore")
 
 
-def parse_validate_args(argv: list[str]):
+def parse_validate_pred_args(argv: list[str]):
 
     # parse arguments to a dict
     args_dict = {}
     try:
         opts, args = getopt.getopt(
             argv,
-            "hq:d:m:l:r:c:y:e:",
+            "hq:w:d:m:l:r:c:y:e:",
             [
                 "qlens=",
+                "ldps=",
                 "dataset=",
                 "models=",
                 "label=",
@@ -50,7 +52,11 @@ def parse_validate_args(argv: list[str]):
             )
             sys.exit()
         elif opt in ("-q", "--qlens"):
-            args_dict["qlens"] = [int(s.strip()) for s in arg.split(",")]
+            s = "[" + arg + "]"
+            args_dict["qlens"] = ast.literal_eval(s.strip())
+        elif opt in ("-w", "--ldps"):
+            s = "[" + arg + "]"
+            args_dict["ldps"] = ast.literal_eval(s.strip())
         elif opt in ("-d", "--dataset"):
             args_dict["dataset"] = arg
         elif opt in ("-m", "--models"):
@@ -69,7 +75,25 @@ def parse_validate_args(argv: list[str]):
     return args_dict
 
 
-def run_validate_processes(exp_args: list):
+def lookup_run_number(folder_path, qlens, ldps):
+    results = []
+    # Get a list of all files in the directory
+    all_files = os.listdir(folder_path)
+    # Filter the list to only include files that match the pattern "*_info.json"
+    for file_name in all_files:
+        if file_name.endswith("_info.json"):
+            file_path = os.path.join(folder_path, file_name)
+            with open(file_path, "r") as file:
+                info_json = json.load(file)
+                if info_json["qlens"] == qlens and info_json["ldps"] == ldps:
+                    results.append(int(file_name.split("_")[0]))
+
+    if results == []:
+        logger.error(f"No run with qlens {qlens} and ldps {ldps} found")
+    return results
+
+
+def run_validate_pred_processes(exp_args: list):
     logger.info(
         "Prepare models benchmark validate args "
         + f"with command line args: {exp_args}"
@@ -100,9 +124,21 @@ def run_validate_processes(exp_args: list):
     # dataset project folder setting
     dataset_project_path = main_path + exp_args["dataset"] + "_results/"
 
-    conditions = {f"q{qlen}": qlen for qlen in exp_args["qlens"]}
+    # find runs with the desired qlen and ldp
+    # inputs: exp_args["qlens"] and exp_args["ldps"]
+    conditions = []
+    for ldps in exp_args["ldps"]:
+        for qlens in exp_args["qlens"]:
+            run_nums = lookup_run_number(dataset_project_path, qlens, ldps)
+            conditions.append(
+                {
+                    "qlens": qlens,
+                    "ldps": ldps,
+                    "run_nums": run_nums,
+                }
+            )
 
-    # condition_labels = ["queue_length"]
+    # condition_labels = ["queue_length","ldp"]
     key_label = "end2end_delay"
 
     # figure 1
@@ -111,21 +147,21 @@ def run_validate_processes(exp_args: list):
     fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7 * ncols, 5 * nrows))
     axes = axes.flat
 
-    for idx, records_dir in enumerate(conditions):
-        records_path = dataset_project_path + records_dir
+    for idx, records_dict in enumerate(conditions):
         ax = axes[idx]
-        cond = conditions[records_dir]
 
         # open the empirical dataset
-        all_files = os.listdir(records_path)
+        all_files = os.listdir(dataset_project_path)
         files = []
         for f in all_files:
             if f.endswith(".parquet"):
-                files.append(records_path + "/" + f)
+                for run_num in records_dict["run_nums"]:
+                    if f.startswith(f"{run_num}_"):
+                        files.append(dataset_project_path + "/" + f)
 
         cond_df = spark.read.parquet(*files)
         total_count = cond_df.count()
-        logger.info(f"Project path {records_path} parquet files are loaded.")
+        logger.info(f"Parquet files {files} are loaded.")
         logger.info(f"Total number of samples in this empirical dataset: {total_count}")
 
         emp_cdf = list()
@@ -164,13 +200,12 @@ def run_validate_processes(exp_args: list):
                     h5_addr=model_path + f"model_{exp_args['ensemble_num']}.h5",
                 )
 
-            x = np.ones(len(y_points)) * cond
-            x = np.expand_dims(x, axis=1)
-
+            x = np.repeat(
+                [[*records_dict["qlens"], *records_dict["ldps"]]], len(y_points), axis=0
+            )
             y = np.array(y_points, dtype=np.float64)
             y = y.clip(min=0.00)
             prob, logprob, pred_cdf = pr_model.prob_batch(x, y)
-
             ax.plot(
                 y_points,
                 pred_cdf,
@@ -178,7 +213,7 @@ def run_validate_processes(exp_args: list):
                 label="prediction " + model_project_name + "." + model_conf_key,
             )
 
-        ax.set_title(f"qlen={cond}")
+        ax.set_title(f"qlen={records_dict['qlens']},ldps={records_dict['ldps']}")
         ax.set_xlabel("Delay")
         ax.set_ylabel("Success probability")
         ax.grid()

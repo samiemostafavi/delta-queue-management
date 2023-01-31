@@ -15,8 +15,8 @@ from .gym import parse_gym_args, run_gym_processes
 from .noaqm import run_noaqm
 from .plot import parse_plot_args, plot_main
 from .train import parse_train_args, run_train_processes
-from .validate import parse_validate_args, run_validate_processes
 from .validate_gym import parse_validate_gym_args, run_validate_gym_processes
+from .validate_pred import parse_validate_pred_args, run_validate_pred_processes
 
 # very important line to make tensorflow run in sub processes
 ctx._force_start_method("spawn")
@@ -253,9 +253,9 @@ if __name__ == "__main__":
     elif argv[0] == "train":
         train_args = parse_train_args(argv[1:])
         run_train_processes(train_args)
-    elif argv[0] == "validate":
-        train_args = parse_validate_args(argv[1:])
-        run_validate_processes(train_args)
+    elif argv[0] == "validate_pred":
+        train_args = parse_validate_pred_args(argv[1:])
+        run_validate_pred_processes(train_args)
     elif argv[0] == "run":
         exp_args = parse_run_args(argv[1:])
         run_processes(exp_args)

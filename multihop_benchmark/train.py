@@ -281,9 +281,15 @@ def train_model(params):
             loss=model.loss,
         )
 
+        Xnp = np.array(X)
+        Ynp = np.array(Y)
+        training_data = tuple([Xnp[:, i] for i in range(len(condition_labels))]) + (
+            Ynp,
+        )
+
         model.training_model.fit(
-            x=[X, Y],
-            y=Y,
+            x=training_data,
+            y=Ynp,
             steps_per_epoch=steps_per_epoch,
             epochs=round_params["epochs"],
             verbose=0,
