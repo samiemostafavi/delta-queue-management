@@ -18,6 +18,7 @@ def run_aqm(params):
 
     # Queue and Server
     # service process a HeavyTailGamma
+    print(params["module"])
     service = HeavyTailGamma(
         seed=params["service_seed"],
         gamma_concentration=5,

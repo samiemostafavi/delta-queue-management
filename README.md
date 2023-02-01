@@ -3,9 +3,10 @@
 
 
 # delta-queue-management
+
 To reproduce the simulations and results of the paper "Delta: Predictive Queue Management for Time Sensitive Stochastic Networking"
 
-# Start
+## Start
 
 Create a Python 3.9 virtual environment using `virtualenv`
 
@@ -16,87 +17,137 @@ Install dependencies
 
         $ pip install -Ur requirements.txt
 
-# Usage single-hop
+## Benchmarking Delta against other AQM schemes
+
+We assume that an ideal predictor exists for Delta to utilize. It is located in `./predictors` folder.
 
 Tune CoDel, note that `until` argument above 100k makes the run much longer
-
-        $ python -m tune_codel -a 0.09 -u 100000 -l tune_lowutil --target-bounds 1,300 --target-initial 20 --interval-bounds 1,300 --interval-initial 10 --run-noaqm
-        $ python -m tune_codel -a 0.095 -u 100000 -l tune_highutil --target-bounds 1,300 --target-initial 20 --interval-bounds 1,300 --interval-initial 10 --run-noaqm
+```
+python -m tune_codel -a 0.09 -u 100000 -l tune_lowutil --target-bounds 1,300 --target-initial 20 --interval-bounds 1,300 --interval-initial 10 --run-noaqm
+python -m tune_codel -a 0.095 -u 100000 -l tune_highutil --target-bounds 1,300 --target-initial 20 --interval-bounds 1,300 --interval-initial 10 --run-noaqm
+```
 
 Train Deep Queue Network implementation as follows. We set the `delay_ref` parameter to the target delay obtained by tuning CoDel.
+```
+python -m train_deepq -a 0.09 -u 100000 -e 1000000 -l lowutil --interval 2 --delta 0.8 --run-noaqm
+python -m train_deepq -a 0.095 -u 100000 -e 1000000 -l highutil --interval 2 --delta 0.9 --run-noaqm
+```
 
-        $ python -m train_deepq -a 0.09 -u 100000 -e 1000000 -l lowutil --interval 2 --delta 0.8 --run-noaqm
-        $ python -m train_deepq -a 0.095 -u 100000 -e 1000000 -l highutil --interval 2 --delta 0.9 --run-noaqm
+Run benchmarks
 
-Run delay bound benchmarks
+With lower utilization:
+```
+python -m otherschemes_benchmark run --arrival-rate 0.09 --until 1000000 --label lowutil --module delta --run-noaqm
+python -m otherschemes_benchmark run --arrival-rate 0.09 --until 1000000 --label lowutil --module offline-optimum
+python -m otherschemes_benchmark run --arrival-rate 0.09 --until 1000000 --label lowutil --module codel
+python -m otherschemes_benchmark run --arrival-rate 0.09 --until 1000000 --label lowutil --module deepq
+```
 
-        $ python -m delay_bound_benchmark run --arrival-rate 0.09 --until 1000000 --label lowutil --module delta --run-noaqm
-        $ python -m delay_bound_benchmark run --arrival-rate 0.09 --until 1000000 --label lowutil --module offline-optimum
-        $ python -m delay_bound_benchmark run --arrival-rate 0.09 --until 1000000 --label lowutil --module codel
-        $ python -m delay_bound_benchmark run --arrival-rate 0.09 --until 1000000 --label lowutil --module deepq
-        
-        $ python -m delay_bound_benchmark run --arrival-rate 0.095 --until 1000000 --label highutil --module delta --run-noaqm
-        $ python -m delay_bound_benchmark run --arrival-rate 0.095 --until 1000000 --label highutil --module offline-optimum
-        $ python -m delay_bound_benchmark run --arrival-rate 0.095 --until 1000000 --label highutil --module codel
-        $ python -m delay_bound_benchmark run --arrival-rate 0.095 --until 1000000 --label highutil --module deepq
+With higher utilization:
+```
+python -m otherschemes_benchmark run --arrival-rate 0.095 --until 1000000 --label highutil --module delta --run-noaqm
+python -m otherschemes_benchmark run --arrival-rate 0.095 --until 1000000 --label highutil --module offline-optimum
+python -m otherschemes_benchmark run --arrival-rate 0.095 --until 1000000 --label highutil --module codel
+python -m otherschemes_benchmark run --arrival-rate 0.095 --until 1000000 --label highutil --module deepq
+```
 
-Plot the delay bound benchmark results
+Plot the benchmark results
+```
+python -m otherschemes_benchmark plot --project lowutil --models deepq,codel,delta,offline-optimum --type png
+python -m otherschemes_benchmark plot --project highutil --models deepq,codel,delta,offline-optimum --type png
+```
 
-        $ python -m delay_bound_benchmark plot --project lowutil --models deepq,codel,delta,offline-optimum --type png
-        $ python -m delay_bound_benchmark plot --project highutil --models deepq,codel,delta,offline-optimum --type png
+## Sensitivity analysis of Delta AQM
 
-Produce data for training delay predictors
+### Number of samples in predictor training
 
-        $ python -m models_benchmark gym -s 10000 -q 0,3,6,9,12,15,18,21,24 -l gym_p2short -g 0.2
-        $ python -m models_benchmark gym -s 10000 -q 0,10,20,30,40,50 -l gym_p3long -g 0.3
+Create a dataset for q states from 0 to 14, each 200000 samples. GPD concentration is 0.3 (p3).
+```
+python -m numsamples_benchmark gym -s 200000 -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -l gym_p3 -g 0.3
+```
 
-Train predictors with different number of samples and models, then validate them
+Train 10 predictors with 16 samples, then validate the first 3:
+```
+python -m numsamples_benchmark train -d gym_p3 -l train_p3_16 -c numsamples_benchmark/train_conf_16_nogmm.json -e 9
+python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_16.gmevm -l validate_p3_16 -r 3 -c 5 -y 0,100,250 -e 0
+python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_16.gmevm -l validate_p3_16 -r 3 -c 5 -y 0,100,250 -e 1
+python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_16.gmevm -l validate_p3_16 -r 3 -c 5 -y 0,100,250 -e 2
+```
 
-        $ python -m models_benchmark train -d gym_p3long -l train_p3long -c models_benchmark/train_conf_lowsample.json
-        $ python -m models_benchmark validate -q 0,10,20,30,40,50 -d gym_p3long -m train_p3long.gmm,train_p3long.gmevm -l valide_p3long -r 2 -c 3 -y 0,100,800
+Train 10 predictors with 64 samples, then validate the first 3:
+```
+python -m numsamples_benchmark train -d gym_p3 -l train_p3_64 -c numsamples_benchmark/train_conf_64_nogmm.json -e 9
+python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_64.gmevm -l validate_p3_64 -r 3 -c 5 -y 0,100,250 -e 0
+python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_64.gmevm -l validate_p3_64 -r 3 -c 5 -y 0,100,250 -e 1
+python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_64.gmevm -l validate_p3_64 -r 3 -c 5 -y 0,100,250 -e 2
+```
 
-        $ python -m models_benchmark train -d gym_p3 -l train_p3_512 -c models_benchmark/train_conf_512.json -e 10
-        $ python -m models_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_512.gmm,train_p3_512.gmevm -l validate_p3_512 -r 3 -c 5 -y 0,100,250 -e 1
+Train 10 predictors with 128 samples, then validate the first 3:
+```
+python -m numsamples_benchmark train -d gym_p3 -l train_p3_128 -c numsamples_benchmark/train_conf_128_nogmm.json -e 9
+python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_128.gmevm -l validate_p3_128 -r 3 -c 5 -y 0,100,250 -e 0
+python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_128.gmevm -l validate_p3_128 -r 3 -c 5 -y 0,100,250 -e 1
+python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_128.gmevm -l validate_p3_128 -r 3 -c 5 -y 0,100,250 -e 2
+```
 
-        $ python -m models_benchmark train -d gym_p3 -l train_p3_128 -c models_benchmark/train_conf_128.json -e 10
-        $ python -m models_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_128.gmm,train_p3_128.gmevm -l validate_p3_128 -r 3 -c 5 -y 0,100,250 -e 0
+Train 10 predictors with 512 samples, then validate the first 3:
+```
+python -m numsamples_benchmark train -d gym_p3 -l train_p3_512 -c numsamples_benchmark/train_conf_512_nogmm.json -e 9
+python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_512.gmevm -l validate_p3_512 -r 3 -c 5 -y 0,100,250 -e 0
+python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_512.gmevm -l validate_p3_512 -r 3 -c 5 -y 0,100,250 -e 1
+python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_512.gmevm -l validate_p3_512 -r 3 -c 5 -y 0,100,250 -e 2
+```
 
-Run delta models benchmarks
-        $ python -m models_benchmark run -a 0.089 -u 1000000 -l lowutil_p3 -m train_p3_128.gmevm.0 -r 4 -g 0.3 --run-noaqm
-
-
-        $ python -m models_benchmark run -a 0.089 -u 1000000 -l lowutil -m gmevm --run-noaqm
-        $ python -m models_benchmark run -a 0.089 -u 1000000 -l lowutil -m gmm --run-noaqm
-
-        $ python -m models_benchmark run -a 0.094 -u 1000000 -l highutil -m gmevm --run-noaqm
-        $ python -m models_benchmark run -a 0.094 -u 1000000 -l highutil -m gmm --run-noaqm
-
-Plot delta models benchmark results
-
-        $ python -m delta_models_benchmark plot --project lowutil --models gmm,gmevm,offline-optimum --type png
-        $ python -m delta_models_benchmark plot --project highutil --models gmm,gmevm,offline-optimum --type png
+Run the queueing simulation with Delta aqm, no aqm, and offline-optimum aqm
+```
+python -m numsamples_benchmark run -a 0.085 -u 100000 -l run_p3_128 -m train_p3_128.gmevm -r 4 -g 0.3 -e 9 --run-noaqm
+python -m numsamples_benchmark run -a 0.094 -u 1000 -l run_p3_128 -m offline-optimum -r 8 -g 0.3 -e 2 --run-noaqm
 
 
-# Usage multi-hop
+python -m numsamples_benchmark run -a 0.094 -u 10000 -l run_p3_64 -m train_p3_64.gmevm -r 4 -g 0.3 -e 9 --run-noaqm
+python -m numsamples_benchmark run -a 0.094 -u 1000 -l run_p3_128 -m offline-optimum -r 8 -g 0.3 -e 2 --run-noaqm
+
+python -m numsamples_benchmark run -a 0.094 -u 10000 -l run_p3_16 -m train_p3_16.gmevm -r 4 -g 0.3 -e 9 --run-noaqm
+python -m numsamples_benchmark run -a 0.094 -u 1000 -l run_p3_128 -m offline-optimum -r 8 -g 0.3 -e 2 --run-noaqm
+```
+
+
+Plot the results
+```
+python -m numsamples_benchmark plot --project run_p3_128 --models noaqm,gmevm,oo --type png
+```
+```
+python -m numsamples_benchmark plot --project highutil --models gmm,gmevm,offline-optimum --type png
+```
+
+
+## Multi-hop Benchmarks
 
 This is an example for a two hop case. 
 
 Produce data for training delay predictors and validate it. We produce samples for 2 hop and 1 hop cases since for a 2 hop network, we need both.
 
-        $ python -m multihop_benchmark gym -s 10000 -q 0,2,4,6,8,10 -d 0.1,0.5,0.9 -p 2 -l gym_2hop_p2 -g 0.2
-        $ python -m multihop_benchmark validate_gym -q [0,2],[4,4],[6,6],[0,10],[8,10] -d gym_2hop_p2 -w [0.1,0.1],[0.1,0.9],[0.9,0.9] -l validate_gym_2hop_p2 -r 3 -c 5 -y 0,100,250
+```
+python -m multihop_benchmark gym -s 10000 -q 0,2,4,6,8,10 -d 0.1,0.5,0.9 -p 2 -l gym_2hop_p2 -g 0.2
+python -m multihop_benchmark validate_gym -q [0,2],[4,4],[6,6],[0,10],[8,10] -d gym_2hop_p2 -w [0.1,0.1],[0.1,0.9],[0.9,0.9] -l validate_gym_2hop_p2 -r 3 -c 5 -y 0,100,250
+```
 
-        $ python -m multihop_benchmark gym -s 10000 -q 0,2,4,6,8,10 -d 0.1,0.5,0.9 -p 1 -l gym_1hop_p2 -g 0.2
-        $ python -m multihop_benchmark validate_gym -q [0],[4],[6],[8],[10] -d gym_1hop_p2 -w [0.1],[0.5],[0.9] -l validate_gym_1hop_p2 -r 3 -c 5 -y 0,100,250
+```
+python -m multihop_benchmark gym -s 10000 -q 0,2,4,6,8,10 -d 0.1,0.5,0.9 -p 1 -l gym_1hop_p2 -g 0.2
+python -m multihop_benchmark validate_gym -q [0],[4],[6],[8],[10] -d gym_1hop_p2 -w [0.1],[0.5],[0.9] -l validate_gym_1hop_p2 -r 3 -c 5 -y 0,100,250
+```
 
 Train predictors
 
-        $ python -m multihop_benchmark train -d gym_2hop_p2 -l train_2hop_p2 -c multihop_benchmark/train_conf_2hop.json -e 10
-        $ python -m multihop_benchmark validate_pred -q [0,2],[4,4],[6,6],[0,10],[8,10] -d gym_2hop_p2 -w [0.1,0.1],[0.1,0.9],[0.9,0.9] -m train_2hop_p2.gmm,train_2hop_p2.gmevm -l validate_pred_2hop_p2 -r 3 -c 5 -y 0,100,250 -e 1
+```
+python -m multihop_benchmark train -d gym_2hop_p2 -l train_2hop_p2 -c multihop_benchmark/train_conf_2hop.json -e 10
+python -m multihop_benchmark validate_pred -q [0,2],[4,4],[6,6],[0,10],[8,10] -d gym_2hop_p2 -w [0.1,0.1],[0.1,0.9],[0.9,0.9] -m train_2hop_p2.gmm,train_2hop_p2.gmevm -l validate_pred_2hop_p2 -r 3 -c 5 -y 0,100,250 -e 1
+```
 
-        $ python -m multihop_benchmark train -d gym_1hop_p2 -l train_1hop_p2 -c multihop_benchmark/train_conf_1hop.json -e 10
-        $ python -m multihop_benchmark validate_pred -q [0],[4],[6],[8],[10] -d gym_1hop_p2 -w [0.1],[0.5],[0.9] -m train_1hop_p2.gmm,train_1hop_p2.gmevm -l validate_pred_1hop_p2 -r 3 -c 5 -y 0,100,250 -e 1
-
+```
+python -m multihop_benchmark train -d gym_1hop_p2 -l train_1hop_p2 -c multihop_benchmark/train_conf_1hop.json -e 10
+python -m multihop_benchmark validate_pred -q [0],[4],[6],[8],[10] -d gym_1hop_p2 -w [0.1],[0.5],[0.9] -m train_1hop_p2.gmm,train_1hop_p2.gmevm -l validate_pred_1hop_p2 -r 3 -c 5 -y 0,100,250 -e 1
+```
         
 # Contributing
 

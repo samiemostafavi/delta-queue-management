@@ -18,8 +18,17 @@ def run_core(params, queue) -> Tuple[pl.DataFrame, dict]:
     from qsimpy.random import Deterministic
 
     module_label = params["module_label"]
+    if module_label == "gmevm" or module_label == "gmm":
+        records_path = (
+            params["records_path"]
+            + module_label
+            + "/"
+            + str(params["ensemble_number"])
+            + "/"
+        )
+    else:
+        records_path = params["records_path"] + module_label + "/"
 
-    records_path = params["records_path"] + module_label + "/"
     os.makedirs(records_path, exist_ok=True)
 
     # Create the QSimPy environment

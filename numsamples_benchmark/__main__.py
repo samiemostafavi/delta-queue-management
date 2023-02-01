@@ -60,10 +60,13 @@ def parse_run_args(argv: list[str]):
         elif opt in ("-l", "--label"):
             args_dict["label"] = arg
         elif opt in ("-m", "--model"):
-            # <train-label>.<model-type>.<ensemble-num>
-            # e.g. train_p3_128.gmm.0
+            # <train-label>.<model-type>
+            # e.g. train_p3_128.gmm
             args_dict["model"] = [s.strip() for s in arg.split(".")]
-            args_dict["module_label"] = args_dict["model"][1]
+            if args_dict["model"][0] == "offline-optimum":
+                args_dict["module_label"] = "oo"
+            else:
+                args_dict["module_label"] = args_dict["model"][1]
         elif opt in ("-r", "--runs"):
             args_dict["n_runs"] = int(arg)
         elif opt in ("-e", "--ensembles"):
@@ -112,9 +115,9 @@ def run_processes(exp_args: dict):
 
         # parameter figure out
         keys = list(bench_params.keys())
-        key_this_run = keys[run_number % len(keys)]
-        res = divmod(run_number, len(keys))
-        ensemble_number = res[0]
+        quotient, remainder = divmod(run_number, len(keys))
+        key_this_run = keys[remainder]
+        ensemble_number = quotient % exp_args["n_ensembles"]
 
         # model figure out
         if exp_args["model"][0] != "offline-optimum":
