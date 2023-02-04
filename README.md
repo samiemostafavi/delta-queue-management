@@ -63,61 +63,51 @@ python -m otherschemes_benchmark plot --project highutil --models deepq,codel,de
 
 Create a dataset for q states from 0 to 14, each 200000 samples. GPD concentration is 0.3 (p3).
 ```
-python -m numsamples_benchmark gym -s 200000 -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -l gym_p3 -g 0.3
+python -m numsamples_benchmark gym -s 200000 -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -l gym_p3 -g 0.3 -r 30
+python -m numsamples_benchmark gym -s 200000 -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -l gym_p0 -g 0.001 -r 30
 ```
 
-Train 10 predictors with 16 samples, then validate the first 3:
-```
-python -m numsamples_benchmark train -d gym_p3 -l train_p3_16 -c numsamples_benchmark/train_conf_16_nogmm.json -e 9
-python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_16.gmevm -l validate_p3_16 -r 3 -c 5 -y 0,100,250 -e 0
-python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_16.gmevm -l validate_p3_16 -r 3 -c 5 -y 0,100,250 -e 1
-python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_16.gmevm -l validate_p3_16 -r 3 -c 5 -y 0,100,250 -e 2
-```
-
-Train 10 predictors with 64 samples, then validate the first 3:
+Train 9 predictors with 64 samples, on the p3 dataset then validate the first predictor (`-e 0`):
 ```
 python -m numsamples_benchmark train -d gym_p3 -l train_p3_64 -c numsamples_benchmark/train_conf_64_nogmm.json -e 9
-python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_64.gmevm -l validate_p3_64 -r 3 -c 5 -y 0,100,250 -e 0
-python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_64.gmevm -l validate_p3_64 -r 3 -c 5 -y 0,100,250 -e 1
-python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_64.gmevm -l validate_p3_64 -r 3 -c 5 -y 0,100,250 -e 2
+python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_16.gmevm -l validate_p3_64 -r 3 -c 5 -y 0,100,250 -e 0
 ```
 
-Train 10 predictors with 128 samples, then validate the first 3:
+Train 9 predictors with 64 samples, on the p0 dataset then validate the first predictor (`-e 0`):
 ```
-python -m numsamples_benchmark train -d gym_p3 -l train_p3_128 -c numsamples_benchmark/train_conf_128_nogmm.json -e 9
-python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_128.gmevm -l validate_p3_128 -r 3 -c 5 -y 0,100,250 -e 0
-python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_128.gmevm -l validate_p3_128 -r 3 -c 5 -y 0,100,250 -e 1
-python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_128.gmevm -l validate_p3_128 -r 3 -c 5 -y 0,100,250 -e 2
+python -m numsamples_benchmark train -d gym_p0 -l train_p0_64 -c numsamples_benchmark/train_conf_64_nogmm.json -e 9
+python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_16.gmevm -l validate_p3_64 -r 3 -c 5 -y 0,100,250 -e 0
 ```
 
-Train 10 predictors with 512 samples, then validate the first 3:
-```
-python -m numsamples_benchmark train -d gym_p3 -l train_p3_512 -c numsamples_benchmark/train_conf_512_nogmm.json -e 9
-python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_512.gmevm -l validate_p3_512 -r 3 -c 5 -y 0,100,250 -e 0
-python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_512.gmevm -l validate_p3_512 -r 3 -c 5 -y 0,100,250 -e 1
-python -m numsamples_benchmark validate -q 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 -d gym_p3 -m train_p3_512.gmevm -l validate_p3_512 -r 3 -c 5 -y 0,100,250 -e 2
-```
 
 Run the queueing simulation with Delta aqm, no aqm, and offline-optimum aqm
+CAUTION: delta benchmarks with the following configuration (1M seconds) on a system with 18 cores take about 8 hours. Offline-optimum takes half an hour.
 ```
-python -m numsamples_benchmark run -a 0.085 -u 100000 -l run_p3_128 -m train_p3_128.gmevm -r 4 -g 0.3 -e 9 --run-noaqm
-python -m numsamples_benchmark run -a 0.094 -u 1000 -l run_p3_128 -m offline-optimum -r 8 -g 0.3 -e 2 --run-noaqm
+python -m numsamples_benchmark run -a 0.088 -u 1000000 -l run_p3_32768 -m train_p3_32768.gmevm -r 4 -g 0.3 -e 9 --run-noaqm
 
+python -m numsamples_benchmark run -a 0.088 -u 1000000 -l run_p0_32768 -m train_p0_32768.gmevm -r 4 -g 0.001 -e 9 --run-noaqm
 
-python -m numsamples_benchmark run -a 0.094 -u 10000 -l run_p3_64 -m train_p3_64.gmevm -r 4 -g 0.3 -e 9 --run-noaqm
-python -m numsamples_benchmark run -a 0.094 -u 1000 -l run_p3_128 -m offline-optimum -r 8 -g 0.3 -e 2 --run-noaqm
+python -m numsamples_benchmark run -a 0.088 -u 1000000 -l run_p3_4096 -m train_p3_4096.gmevm -r 4 -g 0.3 -e 9 --run-noaqm
+python -m numsamples_benchmark run -a 0.088 -u 1000000 -l run_p3_4096 -m offline-optimum -r 4 -g 0.3 -e 9 --run-noaqm
 
-python -m numsamples_benchmark run -a 0.094 -u 10000 -l run_p3_16 -m train_p3_16.gmevm -r 4 -g 0.3 -e 9 --run-noaqm
-python -m numsamples_benchmark run -a 0.094 -u 1000 -l run_p3_128 -m offline-optimum -r 8 -g 0.3 -e 2 --run-noaqm
+python -m numsamples_benchmark run -a 0.088 -u 1000000 -l run_p3_128 -m train_p3_128.gmevm -r 4 -g 0.3 -e 9 --run-noaqm
+python -m numsamples_benchmark run -a 0.088 -u 1000000 -l run_p3_128 -m offline-optimum -r 4 -g 0.3 -e 9 --run-noaqm
+
+python -m numsamples_benchmark run -a 0.088 -u 1000000 -l run_p3_64 -m train_p3_64.gmevm -r 4 -g 0.3 -e 9 --run-noaqm
+python -m numsamples_benchmark run -a 0.088 -u 1000000 -l run_p3_64 -m offline-optimum -r 4 -g 0.3 -e 9 --run-noaqm
 ```
 
 
 Plot the results
 ```
+python -m numsamples_benchmark plot --project run_p0_32768 --models noaqm,gmevm,oo --type png
+
+python -m numsamples_benchmark plot --project run_p3_32768 --models noaqm,gmevm,oo --type png
+python -m numsamples_benchmark plot --project run_p3_4096 --models noaqm,gmevm,oo --type png
 python -m numsamples_benchmark plot --project run_p3_128 --models noaqm,gmevm,oo --type png
-```
-```
-python -m numsamples_benchmark plot --project highutil --models gmm,gmevm,offline-optimum --type png
+python -m numsamples_benchmark plot --project run_p3_64 --models noaqm,gmevm,oo --type png
+
+python -m numsamples_benchmark plot --project agg --models noaqm,gmevm_64,gmevm_128,gmevm_4096,gmevm_32k,oo --type png
 ```
 
 

@@ -87,7 +87,7 @@ def plot_main(plot_args):
             logger.info(f"AQM method: {mkey}")
             res_dict[qkey][mkey] = {}
 
-            if mkey == "gmm" or mkey == "gmevm":
+            if "gmm" in mkey or "gmevm" in mkey:
                 ensembles = []
                 files_folders = os.listdir(project_path + "/" + mkey)
                 for file_folder in files_folders:
@@ -172,7 +172,7 @@ def plot_main(plot_args):
 
         # fill y
         y = []
-        if scheme == "gmm" or scheme == "gmevm":
+        if "gmm" in scheme or "gmevm" in scheme:
             min_error = []
             max_error = []
             for target_delay in targets:
@@ -209,35 +209,3 @@ def plot_main(plot_args):
     plt.savefig(
         project_folder + "result." + plot_args["type"], format=plot_args["type"]
     )
-
-
-"""
-bars = [str(par) for par in bench_params.values()]
-
-
-y_pos = np.arange(len(bars))
-fig, ax = plt.subplots()
-ax.bar(
-    y_pos,
-    results,
-    label="delta",
-)
-ax.bar(
-    y_pos,
-    1.00 - np.array(list(bench_params.values())),
-    label="no-aqm",
-)
-# fix x axis
-# ax.set_xticks(range(math.ceil(minx),math.floor(maxx),100))
-plt.xticks(y_pos, bars)
-plt.yticks(y_pos, list(bench_params.values()))
-ax.set_yscale("log")
-ax.set_xlabel("Target delay")
-ax.set_ylabel("Failed tasks ratio")
-
-# draw the legend
-ax.legend()
-ax.grid()
-
-fig.savefig("result.png")
-"""
