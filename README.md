@@ -83,20 +83,13 @@ Use code checkers
         $ pre-commit run --all-files
 
 
-# Demo commands to run:
-        1. python -m models_benchmark gym -s 10000 -q 0,3,6,9,12,15,18,21,24 -l gym_p2short -g 0.6 -r 20
-        2. python -m models_benchmark train -d gym_p2short -l train_p2short -c models_benchmark/train_conf.json -e 1
-        3. python -m models_benchmark validate -q 0,3,6,9,12,15,18,21,24 -d gym_p2short -m train_p2short.gmm,train_p2short.gmevm -l validate_p2short -r 3 -c 5 -y 0,100,250 -e 0
-        4. python -m models_benchmark run -a 0.089 -u 10000 -l lowutil_p2short -m offline-optimum.oo -r 4 -g 0.6 --run-noaqm
-        5. python -m models_benchmark plot --project lowutil_p2short --models gmm,gmevm,oo --type png
-
 
  # g specific commands to run
         1. python -m models_benchmark gym -s 10000 -q 0,3,6,9,12,15,18,21,24 -l gym_p2shortg5 -g 0.5 -r 18
         2. python -m models_benchmark train -d gym_p2shortg5 -l train_p2shortg5 -c models_benchmark/train_conf.json -e 1
-        3. python -m models_benchmark validate -q 0,3,6,9,12,15,18,21,24 -d gym_p2shortg5 -m train_p2shortg5.gmm,train_p2shortg5.gmevm -l validate_p2shortg5 -r 3 -c 5 -y 0,100,250 -e 0
-        4. python -m models_benchmark run -a 0.0869 -u 100000 -l lowutil_p2shortg5 -m offline-optimum.oo -r 16 -g 0.5 --run-noaqm
-        5. python -m models_benchmark run -a 0.0869 -u 5000 -l lowutil_p2shortg5 -m train_p2shortg5.gmevm.0 -r 4 -g 0.5 --run-noaqm
-        6. python -m models_benchmark run -a 0.0869 -u 50000 -l lowutil_p2shortg5 -m train_p2shortg5.gmm.0 -r 4 -g 0.5 --run-noaqm
+        3. python -m models_benchmark validate -q 0,3,6,9,12,15,18,21,24 -d gym_p2shortg5 -m train_p2shortg5.gmm,train_p2shortg5.gmevm -l validate_p2shortg5 -r 18 -c 5 -y 0,100,250 -e 0
+        4. python -m models_benchmark run -a 0.0869 -u 100000 -l lowutil_p2shortg5 -m offline-optimum.oo -r 15 -g 0.5 --run-noaqm
+        5. python -m models_benchmark run -a 0.0869 -u 100000 -l lowutil_p2shortg5 -m train_p2shortg5.gmevm.0 -r 15 -g 0.5 --run-noaqm
+        6. python -m models_benchmark run -a 0.0869 -u 100000 -l lowutil_p2shortg5 -m train_p2shortg5.gmm.0 -r 15 -g 0.5 --run-noaqm
         7. python -m models_benchmark plot --project lowutil_p2shortg5 --models gmm,gmevm,oo --type png
 
