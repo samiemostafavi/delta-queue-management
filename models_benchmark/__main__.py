@@ -116,6 +116,8 @@ def run_processes(exp_args: dict):
     # experiment parameters
     # quantile values of no-aqm model with p1 as gpd_concentration
     bench_params = {  # target_delay
+        #"p99999": 0.99999,
+        "p9999": 0.9999,
         "p999": 0.999,
         "p99": 0.99,
         "p9": 0.9,
@@ -244,9 +246,11 @@ if __name__ == "__main__":
         run_gym_processes(gym_args)
     elif argv[0] == "train":
         train_args = parse_train_args(argv[1:])
+        
         run_train_processes(train_args)
     elif argv[0] == "validate":
         train_args = parse_validate_args(argv[1:])
+        print(train_args)
         run_validate_processes(train_args)
     elif argv[0] == "plot":
         plot_args = parse_plot_args(argv[1:])
