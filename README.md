@@ -15,7 +15,17 @@ Create a Python 3.9 virtual environment using `virtualenv`
 
 Install dependencies
 
+        $ pip install numpy==1.23.3
+        $ pip install pandas==1.5.0
         $ pip install -Ur requirements.txt
+
+To use pyspark, install Java on your machine
+
+        $ sudo apt-get install openjdk-8-jdk
+
+To use SciencePlot, latex must be installed on your machine
+
+        $ sudo apt-get install dvipng texlive-latex-extra texlive-fonts-recommended cm-super
 
 ## Benchmarking Delta against other AQM schemes
 
@@ -85,7 +95,7 @@ CAUTION: delta benchmarks with the following configuration (1M seconds) on a sys
 ```
 python -m numsamples_benchmark run -a 0.088 -u 1000000 -l run_p3_32768 -m train_p3_32768.gmevm -r 4 -g 0.3 -e 9 --run-noaqm
 
-python -m numsamples_benchmark run -a 0.088 -u 1000000 -l run_p0_32768 -m train_p0_32768.gmevm -r 4 -g 0.001 -e 9 --run-noaqm
+python -m numsamples_benchmark run -a 0.09 -u 10000000 -l run_p0_32768 -m train_p0_32768.gmevm -r 4 -g 0.001 -e 8 --run-noaqm
 
 python -m numsamples_benchmark run -a 0.088 -u 1000000 -l run_p3_4096 -m train_p3_4096.gmevm -r 4 -g 0.3 -e 9 --run-noaqm
 python -m numsamples_benchmark run -a 0.088 -u 1000000 -l run_p3_4096 -m offline-optimum -r 4 -g 0.3 -e 9 --run-noaqm

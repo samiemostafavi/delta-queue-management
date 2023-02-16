@@ -87,7 +87,7 @@ def plot_main(plot_args):
             logger.info(f"AQM method: {mkey}")
             res_dict[qkey][mkey] = {}
 
-            if "gmm" in mkey or "gmevm" in mkey:
+            if "gmm" in mkey or "gmevm" in mkey or "delta" in mkey:
                 ensembles = []
                 files_folders = os.listdir(project_path + "/" + mkey)
                 for file_folder in files_folders:
@@ -172,7 +172,7 @@ def plot_main(plot_args):
 
         # fill y
         y = []
-        if "gmm" in scheme or "gmevm" in scheme:
+        if "gmm" in scheme or "gmevm" in scheme or "delta" in scheme:
             min_error = []
             max_error = []
             for target_delay in targets:
