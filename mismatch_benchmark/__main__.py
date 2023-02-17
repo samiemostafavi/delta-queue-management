@@ -114,7 +114,7 @@ def run_processes(exp_args: dict):
         "p8": 0.8,
     }
 
-    n_workers = (exp_args["n_workers"],)
+    n_workers = exp_args["n_workers"]
     logger.info(f"Initializng {n_workers} workers")
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
     pool = mp.Pool(n_workers)
