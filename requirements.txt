@@ -1,7 +1,7 @@
 git+https://github.com/samiemostafavi/qsimpy.git
 git+https://github.com/samiemostafavi/qsimpy-aqm.git
 git+https://github.com/samiemostafavi/pr3d.git
-numpy
+numpy==1.23.3
 matplotlib
 loguru
 seaborn
@@ -14,3 +14,4 @@ isort
 codespell
 scipy
 petastorm
+pandas==1.5.0
