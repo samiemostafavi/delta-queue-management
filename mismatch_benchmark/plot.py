@@ -8,7 +8,7 @@ from statistics import mean
 import matplotlib.pyplot as plt
 import numpy as np
 from loguru import logger
-
+import scienceplots
 
 def parse_plot_args(argv: list[str]):
 
