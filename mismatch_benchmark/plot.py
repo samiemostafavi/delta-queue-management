@@ -66,6 +66,7 @@ def plot_main(plot_args):
     logger.info(f"All project folders: {project_paths}")
 
     res_dict = {}
+    leg_dict = {}
     quantile_keys = []
     # iterate over quantile keys
     for project_path in project_paths:
@@ -83,9 +84,16 @@ def plot_main(plot_args):
         )
 
         res_dict[qkey] = {}
+        leg_dict[qkey] = {}
         for mkey in plot_args["models"]:
             logger.info(f"AQM method: {mkey}")
             res_dict[qkey][mkey] = {}
+            leg_dict[qkey][mkey] = {}
+
+            # read utilization factor
+            with open(project_path + "/" + mkey + "/info.json") as info_json_file:
+                info = json.load(info_json_file)
+            leg_dict[qkey][mkey]["legend_label"] = info["legend_label"]
 
             if "gmm" in mkey or "gmevm" in mkey or "delta" in mkey:
                 ensembles = []
@@ -144,9 +152,11 @@ def plot_main(plot_args):
                 # noaqm
                 res_dict[qkey]["noaqm"] = 1.00 - quantile_key
 
+    print(leg_dict)
+
     plt.style.use(["science", "ieee", "bright"])
 
-    col_width = 1
+    col_width = 2
     def_x = np.arange(len(list(res_dict.keys()))) + col_width
 
     fig, ax = plt.subplots()
@@ -187,23 +197,28 @@ def plot_main(plot_args):
                 y.append(res_dict[target_delay][scheme]["mean"])
             error = [min_error, max_error]
             ax.errorbar(x, y, yerr=error, fmt="", linestyle="")  # ecolor='grey'
-            ax.bar(x, y, width=bar_width, label=scheme)
+            ax.bar(x, y, width=bar_width, label=leg_dict[target_delay][scheme]["legend_label"])
         else:
             for target_delay in targets:
                 y.append(res_dict[target_delay][scheme])
-            ax.bar(x, y, width=bar_width, label=scheme)
+            ax.bar(x, y, width=bar_width, label=leg_dict[target_delay][scheme]["legend_label"])
 
     # ax = results.plot(x="delay target", y=["no-aqm", *plot_args["models"]], kind="bar")
     ax.set_title(f"Utilization factor: {utilization:.3f}")
+    #ax.set_xlim(0,3)
     ax.set_yscale("log")
     # ax.set_yticks(1.00 - np.array(quantile_keys))
     labels = [item.get_text() for item in ax.get_xticklabels()]
     labels[1 : len(targets) + 1] = targets
     ax.set_xticklabels(labels)
+    
     ax.set_xlabel("Target delay")
     ax.set_ylabel("Failed tasks ratio")
     # draw the legend
-    ax.legend(fontsize=7)
+    ax.legend(fontsize=7, facecolor="white")
+    #ax.legend(facecolor="black")
+    #ax.legend(['No AQM', '','Mean =3.33', '', 'Mean =5', '', 'Mean =10*', '', 'Mean =20', '', 'Mean =80', '','OO', ''],fontsize=7)
+    #ax.legend(fontsize=7, facecolor="black")
     ax.grid()
     plt.tight_layout()
     plt.savefig(
