@@ -198,10 +198,12 @@ def plot_main(plot_args):
             error = [min_error, max_error]
             ax.errorbar(x, y, yerr=error, fmt="", linestyle="")  # ecolor='grey'
             ax.bar(x, y, width=bar_width, label=leg_dict[target_delay][scheme]["legend_label"])
+            #ax.plot(x, y, '--o', label=leg_dict[target_delay][scheme]["legend_label"])
         else:
             for target_delay in targets:
                 y.append(res_dict[target_delay][scheme])
             ax.bar(x, y, width=bar_width, label=leg_dict[target_delay][scheme]["legend_label"])
+            #ax.plot(x, y, '--o', label=leg_dict[target_delay][scheme]["legend_label"])
 
     # ax = results.plot(x="delay target", y=["no-aqm", *plot_args["models"]], kind="bar")
     ax.set_title(f"Utilization factor: {utilization:.3f}")
@@ -215,7 +217,7 @@ def plot_main(plot_args):
     ax.set_xlabel("Target delay")
     ax.set_ylabel("Failed tasks ratio")
     # draw the legend
-    ax.legend(fontsize=7, facecolor="white")
+    ax.legend(fontsize=7, facecolor="white", frameon = True)
     #ax.legend(facecolor="black")
     #ax.legend(['No AQM', '','Mean =3.33', '', 'Mean =5', '', 'Mean =10*', '', 'Mean =20', '', 'Mean =80', '','OO', ''],fontsize=7)
     #ax.legend(fontsize=7, facecolor="black")
