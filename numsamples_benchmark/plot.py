@@ -123,7 +123,7 @@ def plot_main(plot_args):
                     "mean": mean(model_results),
                 }
 
-            elif mkey == "oo":
+            elif mkey == "oo" or mkey == "offline optimum":
                 # oo
                 total_tasks = 0
                 dropped_tasks = 0

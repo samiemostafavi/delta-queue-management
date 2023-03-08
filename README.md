@@ -118,6 +118,7 @@ python -m numsamples_benchmark plot --project run_p3_128 --models noaqm,gmevm,oo
 python -m numsamples_benchmark plot --project run_p3_64 --models noaqm,gmevm,oo --type png
 
 python -m numsamples_benchmark plot --project agg --models noaqm,gmevm_64,gmevm_128,gmevm_4096,gmevm_32k,oo --type png
+python -m numsamples_benchmark plot --project run_p0 --models 'noaqm','delta 512','delta 4096','offline optimum' --type png
 ```
 
 
