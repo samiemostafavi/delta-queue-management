@@ -161,6 +161,8 @@ def plot_main(plot_args):
 
     fig, ax = plt.subplots()
     # iterate over the schemes
+    q = 0   
+    print(len(plot_args["models"]))
     for idx, scheme in enumerate(plot_args["models"]):
 
         # calculate x position
@@ -182,6 +184,8 @@ def plot_main(plot_args):
 
         # fill y
         y = []
+
+        color_choice =  ['greenyellow', 'lawngreen', 'limegreen', 'darkgreen', 'mediumseagreen', 'mediumspringgreen']
         if "gmm" in scheme or "gmevm" in scheme or "delta" in scheme:
             min_error = []
             max_error = []
@@ -197,16 +201,22 @@ def plot_main(plot_args):
                 y.append(res_dict[target_delay][scheme]["mean"])
             error = [min_error, max_error]
             ax.errorbar(x, y, yerr=error, fmt="", linestyle="")  # ecolor='grey'
-            ax.bar(x, y, width=bar_width, label=leg_dict[target_delay][scheme]["legend_label"])
+            ax.bar(x, y, width=bar_width, label=leg_dict[target_delay][scheme]["legend_label"], color=color_choice[q], linestyle='dashed')
+            #ax.plot(x, y, '--o', label=leg_dict[target_delay][scheme]["legend_label"])
+            q = q +1
+        elif "noaqm" in scheme:
+            for target_delay in targets:
+                y.append(res_dict[target_delay][scheme])
+            ax.bar(x, y, width=bar_width, label=leg_dict[target_delay][scheme]["legend_label"], color='red')
             #ax.plot(x, y, '--o', label=leg_dict[target_delay][scheme]["legend_label"])
         else:
             for target_delay in targets:
                 y.append(res_dict[target_delay][scheme])
-            ax.bar(x, y, width=bar_width, label=leg_dict[target_delay][scheme]["legend_label"])
-            #ax.plot(x, y, '--o', label=leg_dict[target_delay][scheme]["legend_label"])
+            ax.bar(x, y, width=bar_width, label=leg_dict[target_delay][scheme]["legend_label"], color='deepskyblue')
+        
 
     # ax = results.plot(x="delay target", y=["no-aqm", *plot_args["models"]], kind="bar")
-    ax.set_title(f"Utilization factor: {utilization:.3f}")
+    #ax.set_title(f"Utilization factor: {utilization:.3f}")
     #ax.set_xlim(0,3)
     ax.set_yscale("log")
     # ax.set_yticks(1.00 - np.array(quantile_keys))
